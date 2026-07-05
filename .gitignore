@@ -311,3 +311,7 @@ source/tests/testdata/comparison/computation.dat
 *autosave*
 _codeql_build_dir/
 _codeql_detected_source_root
+# Metal port local artifacts
+vcpkg_installed/
+spike-metal/spike_host
+build-macos/
