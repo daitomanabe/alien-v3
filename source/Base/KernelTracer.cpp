@@ -1,7 +1,8 @@
 #include "KernelTracer.h"
 
 #include <ranges>
-#include <format>
+#include <iomanip>
+#include <sstream>
 
 #include "AlienExceptions.h"
 
@@ -91,7 +92,9 @@ void KernelTracer::traceEnd(std::chrono::steady_clock::duration duration)
     auto milliseconds = std::chrono::duration<double, std::milli>(duration).count();
 
     std::lock_guard lock(_mutex);
-    writeEntry(std::format("done {:>10.3f} ms", milliseconds), true);
+    std::ostringstream status;
+    status << "done " << std::setw(10) << std::fixed << std::setprecision(3) << milliseconds << " ms";
+    writeEntry(status.str(), true);
 }
 
 // The record at the top of the file always holds the most recent call, the ring below keeps the calls that completed
@@ -99,13 +102,16 @@ void KernelTracer::traceEnd(std::chrono::steady_clock::duration duration)
 // three orders of magnitude more than a single record.
 void KernelTracer::writeEntry(std::string const& status, bool intoHistory)
 {
-    auto entry = std::format("[{:>10} | timestep {:>12}] {:<56}{}", _callIndex, _timestep, _pendingName, status);
+    std::ostringstream entryStream;
+    entryStream << "[" << std::setw(10) << _callIndex << " | timestep " << std::setw(12) << _timestep << "] " << std::left << std::setw(56) << _pendingName
+                << std::right << status;
+    auto entry = entryStream.str();
 
     // A call that is still running is not part of the history, hence it does not shift the oldest entry yet
     auto numHistoryEntries = intoHistory ? _callIndex : _callIndex - 1;
     auto oldestSlot = numHistoryEntries > NumEntries ? numHistoryEntries % NumEntries : 0;
     auto oldestLine = FirstHistoryRecord + static_cast<int>(oldestSlot) + 1;
-    writeRecord(CurrentRecord, entry + std::format("  (history starts at line {})", oldestLine));
+    writeRecord(CurrentRecord, entry + "  (history starts at line " + std::to_string(oldestLine) + ")");
 
     if (intoHistory) {
         auto slot = (_callIndex - 1) % NumEntries;

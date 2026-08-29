@@ -55,6 +55,18 @@ void EngineWorker::tryCopyBuffersFromCudaToOpenGL(GeometryBuffers const& geometr
     }
 }
 
+bool EngineWorker::tryExtractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect)
+{
+    EngineWorkerGuard access(this, FrameTimeout);
+
+    if (access.isTimeout()) {
+        return false;
+    }
+    _simulationCudaFacade->extractRenderDataToHost(result, visibleWorldRect);
+    syncSimulationWithRenderingIfDesired();
+    return true;
+}
+
 bool EngineWorker::isSyncSimulationWithRendering() const
 {
     return _syncSimulationWithRendering;

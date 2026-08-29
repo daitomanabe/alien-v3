@@ -260,3 +260,32 @@ void CudaGeometryBuffers::copyToOpenGL(GeometryBuffers const& geometryBuffers, N
         geometryBuffers->setDetonationEventData(hostDetonationEventBuffer.data(), numObjects.detonationEventVertices);
     }
 }
+
+void CudaGeometryBuffers::copyToHost(HostRenderData& result, NumRenderObjects const& numObjects)
+{
+    result.cells.resize(numObjects.objects);
+    if (numObjects.objects > 0) {
+        CHECK_FOR_DEVICE_ERRORS(cudaMemcpy(result.cells.data(), deviceObjectBuffer, numObjects.objects * sizeof(ObjectVertexData), cudaMemcpyDeviceToHost));
+    }
+
+    result.fluidParticles.resize(numObjects.fluidParticles);
+    if (numObjects.fluidParticles > 0) {
+        CHECK_FOR_DEVICE_ERRORS(cudaMemcpy(
+            result.fluidParticles.data(), deviceFluidParticleBuffer, numObjects.fluidParticles * sizeof(FluidParticleVertexData), cudaMemcpyDeviceToHost));
+    }
+
+    result.attackEvents.resize(numObjects.attackEventVertices);
+    if (numObjects.attackEventVertices > 0) {
+        CHECK_FOR_DEVICE_ERRORS(cudaMemcpy(
+            result.attackEvents.data(), deviceAttackEventBuffer, numObjects.attackEventVertices * sizeof(AttackEventVertexData), cudaMemcpyDeviceToHost));
+    }
+
+    result.detonationEvents.resize(numObjects.detonationEventVertices);
+    if (numObjects.detonationEventVertices > 0) {
+        CHECK_FOR_DEVICE_ERRORS(cudaMemcpy(
+            result.detonationEvents.data(),
+            deviceDetonationEventBuffer,
+            numObjects.detonationEventVertices * sizeof(DetonationEventVertexData),
+            cudaMemcpyDeviceToHost));
+    }
+}

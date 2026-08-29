@@ -13,6 +13,7 @@
 #include <EngineInterface/ArraySizesForTOs.h>
 #include <EngineInterface/Definitions.h>
 #include <EngineInterface/GeometryBuffers.h>
+#include <EngineInterface/HostRenderData.h>
 #include <EngineInterface/StatisticsEntry.h>
 #include <EngineInterface/SelectionShallowData.h>
 #include <EngineInterface/SettingsForSimulation.h>
@@ -48,6 +49,7 @@ public:
     Ids getMaxIds() const;
 
     void copyBuffersFromCudaToOpenGL(GeometryBuffers const& geometryBuffers, RealRect const& visibleWorldRect);
+    void extractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect);
     TOs getSimulationData(int2 const& rectUpperLeft, int2 const& rectLowerRight);  // DataTO is unmanaged (i.e. must be deleted by the caller)
     TOs getSelectedSimulationData(bool includeClusters);
     TOs getInspectedSimulationData(std::vector<uint64_t> entityIds);

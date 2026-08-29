@@ -62,6 +62,11 @@ void _SimulationFacadeImpl::tryCopyBuffersFromCudaToOpenGL(GeometryBuffers const
     _worker.tryCopyBuffersFromCudaToOpenGL(geometryBuffers, visibleWorldRect);
 }
 
+bool _SimulationFacadeImpl::tryExtractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect)
+{
+    return _worker.tryExtractRenderDataToHost(result, visibleWorldRect);
+}
+
 bool _SimulationFacadeImpl::isSyncSimulationWithRendering() const
 {
     return _worker.isSyncSimulationWithRendering();

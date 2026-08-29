@@ -3,6 +3,7 @@
 #include "ArraySizesForGpuEntities.h"
 #include "Definitions.h"
 #include "GeometryBuffers.h"
+#include "HostRenderData.h"
 #include "StatisticsEntry.h"
 #include "PreviewDesc.h"
 #include "SelectionShallowData.h"
@@ -35,6 +36,7 @@ public:
     // If the GPU is busy for a specified duration, the buffers will not be updated.
     //
     virtual void tryCopyBuffersFromCudaToOpenGL(GeometryBuffers const& geometryBuffers, RealRect const& visibleWorldRect) = 0;
+    virtual bool tryExtractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect) = 0;
     virtual bool isSyncSimulationWithRendering() const = 0;
     virtual void setSyncSimulationWithRendering(bool value) = 0;
     virtual int getSyncSimulationWithRenderingRatio() const = 0;

@@ -167,6 +167,27 @@ void _SimulationCudaFacade::copyBuffersFromCudaToOpenGL(GeometryBuffers const& g
     syncAndCheck();
 }
 
+void _SimulationCudaFacade::extractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect)
+{
+    checkAndProcessSimulationParameterChanges();
+
+    KernelProfiler::CategoryScope profilerScope(KernelCategory::Rendering);
+    auto simulationData = getSimulationDataPtrCopy();
+
+    GeometryKernelsService::get().correctPositionsForRendering(_settings, simulationData, visibleWorldRect);
+    auto numRenderObjects = GeometryKernelsService::get().getNumRenderObjects(_settings, simulationData, visibleWorldRect);
+
+    _cudaGeometryBuffers->allocateBuffersForNoInterop(numRenderObjects);
+    GeometryKernelsService::get().extractObjectData(_settings, simulationData, *_cudaGeometryBuffers, visibleWorldRect, false);
+    syncAndCheck();
+    _cudaGeometryBuffers->copyToHost(result, numRenderObjects);
+
+    GeometryKernelsService::get().restorePositions(_settings, simulationData);
+    syncAndCheck();
+
+    result.timestep = getCurrentTimestep();
+}
+
 void _SimulationCudaFacade::calcTimesteps(uint64_t timesteps, bool forceUpdateStatistics)
 {
     calcTimestepsInternal(timesteps, forceUpdateStatistics, false);

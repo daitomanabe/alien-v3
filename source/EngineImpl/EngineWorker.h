@@ -13,6 +13,7 @@
 #include <EngineInterface/ArraySizesForGpuEntities.h>
 #include <EngineInterface/Definitions.h>
 #include <EngineInterface/GeometryBuffers.h>
+#include <EngineInterface/HostRenderData.h>
 #include <EngineInterface/StatisticsEntry.h>
 #include <EngineInterface/PreviewDesc.h>
 #include <EngineInterface/SelectionShallowData.h>
@@ -45,6 +46,7 @@ public:
     std::string getGpuName() const;
 
     void tryCopyBuffersFromCudaToOpenGL(GeometryBuffers const& geometryBuffers, RealRect const& visibleWorldRect);
+    bool tryExtractRenderDataToHost(HostRenderData& result, RealRect const& visibleWorldRect);
 
     bool isSyncSimulationWithRendering() const;
     void setSyncSimulationWithRendering(bool value);

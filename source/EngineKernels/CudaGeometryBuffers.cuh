@@ -1,6 +1,7 @@
 #pragma once
 
 #include <EngineInterface/GeometryBuffers.h>
+#include <EngineInterface/HostRenderData.h>
 
 #include "Base.cuh"
 
@@ -43,4 +44,5 @@ struct CudaGeometryBuffers
     void allocateBuffersForNoInterop(NumRenderObjects const& numObjects);
     void freeBuffersForNoInterop();
     void copyToOpenGL(GeometryBuffers const& geometryBuffers, NumRenderObjects const& numObjects);
+    void copyToHost(HostRenderData& result, NumRenderObjects const& numObjects);
 };
