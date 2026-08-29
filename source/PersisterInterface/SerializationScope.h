@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Base/ZipCompat.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -295,7 +297,7 @@ namespace cereal
                     return;
                 }
                 value.resize(rawValues.size());
-                for (auto const& [weight, rawValue] : std::views::zip(value, rawValues)) {
+                for (auto const& [weight, rawValue] : aliencompat::zip(value, rawValues)) {
                     weight = NeuralNetWeight::fromRawValue(static_cast<uint8_t>(rawValue));
                 }
             } else {

@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -136,7 +138,7 @@ protected:
     void compare(StatisticsHistoryData const& expected, StatisticsHistoryData const& actual)
     {
         ASSERT_EQ(expected.colors.size(), actual.colors.size());
-        for (auto const& [expectedSample, actualSample] : std::views::zip(expected.colors, actual.colors)) {
+        for (auto const& [expectedSample, actualSample] : aliencompat::zip(expected.colors, actual.colors)) {
             compare(expectedSample, actualSample);
         }
         ASSERT_EQ(expected.lineages.size(), actual.lineages.size());
@@ -144,7 +146,7 @@ protected:
             auto actualSamplesIt = actual.lineages.find(lineageId);
             ASSERT_TRUE(actualSamplesIt != actual.lineages.end());
             ASSERT_EQ(expectedSamples.size(), actualSamplesIt->second.size());
-            for (auto const& [expectedSample, actualSample] : std::views::zip(expectedSamples, actualSamplesIt->second)) {
+            for (auto const& [expectedSample, actualSample] : aliencompat::zip(expectedSamples, actualSamplesIt->second)) {
                 compare(expectedSample, actualSample);
             }
         }

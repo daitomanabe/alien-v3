@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include <ranges>
 
 #include <gtest/gtest.h>
@@ -59,7 +61,7 @@ TEST_F(GeometryMutationTests, geometryMutation_zeroProbabilityNoChange)
     auto actualGenome = getMutatedGenome();
 
     ASSERT_EQ(genome._genes.size(), actualGenome._genes.size());
-    for (auto const& [expectedGene, actualGene] : std::views::zip(genome._genes, actualGenome._genes)) {
+    for (auto const& [expectedGene, actualGene] : aliencompat::zip(genome._genes, actualGenome._genes)) {
         EXPECT_EQ(expectedGene._shape, actualGene._shape);
         EXPECT_EQ(expectedGene._stiffness, actualGene._stiffness);
     }
@@ -81,7 +83,7 @@ TEST_F(GeometryMutationTests, geometryMutation_doesNotChangeNodes)
     auto actualGenome = getMutatedGenome();
 
     ASSERT_EQ(genome._genes.size(), actualGenome._genes.size());
-    for (auto const& [expectedGene, actualGene] : std::views::zip(genome._genes, actualGenome._genes)) {
+    for (auto const& [expectedGene, actualGene] : aliencompat::zip(genome._genes, actualGenome._genes)) {
         EXPECT_EQ(expectedGene._nodes, actualGene._nodes);
         EXPECT_EQ(expectedGene._name, actualGene._name);
         EXPECT_EQ(expectedGene._homogeneousCellType, actualGene._homogeneousCellType);

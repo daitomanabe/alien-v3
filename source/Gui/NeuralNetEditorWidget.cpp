@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include "NeuralNetEditorWidget.h"
 
 #include <algorithm>
@@ -667,7 +669,7 @@ void _NeuralNetEditorWidget::drawCellFunctionBlocks(
     float rowSpacing)
 {
     auto isInnermostLane = true;
-    for (auto const& [functionModule, lane] : std::views::zip(cellFunctionModules, layout.cellFunctionLanes)) {
+    for (auto const& [functionModule, lane] : aliencompat::zip(cellFunctionModules, layout.cellFunctionLanes)) {
         if (functionModule.channels.empty()) {
             continue;
         }

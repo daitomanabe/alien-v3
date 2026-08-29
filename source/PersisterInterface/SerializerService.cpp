@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include "SerializerService.h"
 
 #include <algorithm>
@@ -2273,7 +2275,7 @@ namespace
     std::unordered_map<uint32_t, ColorTimeline> expandColorTimelines(DeduplicatedColorTimelines const& deduplicated)
     {
         std::unordered_map<uint32_t, ColorTimeline> result;
-        for (auto&& [timeline, colorBitsets] : std::views::zip(deduplicated.uniqueTimelines, deduplicated.colorBitsetGroups)) {
+        for (auto&& [timeline, colorBitsets] : aliencompat::zip(deduplicated.uniqueTimelines, deduplicated.colorBitsetGroups)) {
             for (auto const colorBitset : colorBitsets) {
                 result.emplace(colorBitset, timeline);
             }
@@ -2296,10 +2298,10 @@ namespace
     std::vector<Sample> createSamplesWithTiming(Timeline const& timeline)
     {
         std::vector<Sample> result(timeline.timestep.size());
-        for (auto&& [sample, value] : std::views::zip(result, timeline.timestep)) {
+        for (auto&& [sample, value] : aliencompat::zip(result, timeline.timestep)) {
             sample.timestep = value;
         }
-        for (auto&& [sample, value] : std::views::zip(result, timeline.systemClock)) {
+        for (auto&& [sample, value] : aliencompat::zip(result, timeline.systemClock)) {
             sample.systemClock = value;
         }
         return result;
@@ -2321,7 +2323,7 @@ namespace
     void applyDataColumns(std::vector<Sample>& samples, Timeline const& timeline, Columns const& columns)
     {
         for (auto const& [id, column, field] : columns) {
-            for (auto&& [sample, value] : std::views::zip(samples, timeline.*column)) {
+            for (auto&& [sample, value] : aliencompat::zip(samples, timeline.*column)) {
                 sample.data.*field = value;
             }
         }
@@ -2356,7 +2358,7 @@ namespace
 
         for (auto const& [colorBitset, columns] : timeline.colorTimelines) {
             for (auto const& [id, column, field] : ColorColumnDescs) {
-                for (auto&& [sample, value] : std::views::zip(result, columns.*column)) {
+                for (auto&& [sample, value] : aliencompat::zip(result, columns.*column)) {
                     sample.data[colorBitset].*field = value;
                 }
             }
@@ -2430,10 +2432,10 @@ namespace
     {
         auto result = createSamplesWithTiming<LineageSample>(timeline);
         applyDataColumns(result, timeline, LineageColumnDescs);
-        for (auto&& [sample, value] : std::views::zip(result, timeline.colorBitset)) {
+        for (auto&& [sample, value] : aliencompat::zip(result, timeline.colorBitset)) {
             sample.data.colorBitset = value;
         }
-        for (auto&& [sample, value] : std::views::zip(result, timeline.representativeCellId)) {
+        for (auto&& [sample, value] : aliencompat::zip(result, timeline.representativeCellId)) {
             sample.data.representativeCellId = value;
         }
         return result;

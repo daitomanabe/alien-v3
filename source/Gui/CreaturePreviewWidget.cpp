@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include "CreaturePreviewWidget.h"
 
 #include <algorithm>
@@ -474,10 +476,10 @@ void _CreaturePreviewWidget::processNeuralActivityEditor(bool& phenotypeChanged,
                 }
             }
 
-            for (auto [channel, entry] : std::views::zip(selectedCell->_signal._channels, entries)) {
+            for (auto [channel, entry] : aliencompat::zip(selectedCell->_signal._channels, entries)) {
                 channel = entry.value;
             }
-            for (auto [memory, entry] : std::views::zip(selectedCell->_memory, entries | std::views::drop(STANDARD_NEURONS_PER_CELL))) {
+            for (auto [memory, entry] : aliencompat::zip(selectedCell->_memory, entries | std::views::drop(STANDARD_NEURONS_PER_CELL))) {
                 memory = entry.value;
             }
 

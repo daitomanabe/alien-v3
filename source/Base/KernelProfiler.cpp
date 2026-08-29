@@ -1,3 +1,5 @@
+#include <Base/ZipCompat.h>
+
 #include "KernelProfiler.h"
 
 #include <algorithm>
@@ -153,7 +155,7 @@ std::string KernelProfiler::createReport() const
     }
 
     std::array<Entry, static_cast<int>(KernelCategory::Count)> totals;
-    for (auto const& [total, entries] : std::views::zip(totals, _entriesByCategory)) {
+    for (auto const& [total, entries] : aliencompat::zip(totals, _entriesByCategory)) {
         total = sumUp(entries);
     }
     auto grandTotal = Entry{};
@@ -164,7 +166,7 @@ std::string KernelProfiler::createReport() const
 
     stream << std::left << std::setw(56) << "category" << std::right << std::setw(10) << "calls" << std::setw(14) << "total [ms]" << std::setw(21) << "share"
            << "\n";
-    for (auto const& [category, total] : std::views::zip(AllCategories, totals)) {
+    for (auto const& [category, total] : aliencompat::zip(AllCategories, totals)) {
         stream << std::left << std::setw(56) << getCategoryName(category) << std::right << std::setw(10) << total.count << std::setw(14) << std::fixed
                << std::setprecision(3) << toMilliseconds(total.totalNanoseconds) << std::setw(20) << std::setprecision(1)
                << getShare(total.totalNanoseconds, grandTotal.totalNanoseconds) << "%\n";
@@ -173,7 +175,7 @@ std::string KernelProfiler::createReport() const
            << toMilliseconds(grandTotal.totalNanoseconds) << std::setw(20) << "100.0" << "%\n";
 
     // The shares are relative to the category
-    for (auto const& [category, total, entries] : std::views::zip(AllCategories, totals, _entriesByCategory)) {
+    for (auto const& [category, total, entries] : aliencompat::zip(AllCategories, totals, _entriesByCategory)) {
         if (entries.empty()) {
             continue;
         }
