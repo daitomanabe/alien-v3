@@ -38,6 +38,8 @@ public:
 
     UdpChannel& channel() { return _sender; }
 
+    size_t lastPointCount() const { return _lastPointCount; }
+
     void sendFrame(HostRenderData const& renderData)
     {
         if (!_sender.hasTarget()) {
@@ -45,8 +47,9 @@ public:
         }
         _points.clear();
         samplePoints(renderData);
+        _lastPointCount = _points.size() / PointSize;
 
-        auto pointBytes = _points.size() * PointSize;
+        auto pointBytes = _points.size();  // _points is already a byte vector
         auto numChunks = std::max<size_t>(1, (pointBytes + MaxPayload - 1) / MaxPayload);
 
         std::vector<uint8_t> packet;
@@ -126,5 +129,6 @@ private:
     int _maxCells = 0;
     int _maxFluid = 0;
     uint32_t _frameId = 0;
+    size_t _lastPointCount = 0;
     std::vector<uint8_t> _points;
 };

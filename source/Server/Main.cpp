@@ -210,7 +210,8 @@ int main(int argc, char** argv)
                 auto timestep = simulationFacade->getCurrentTimestep();
                 auto tps = simulationFacade->getTps();
                 std::cout << "timestep " << timestep << " (" << tps << " TPS), cells " << objects.numCellObjects << ", cellsInView "
-                          << (haveRenderData ? renderData.cells.size() : 0) << ", attacks " << (haveRenderData ? renderData.attackEvents.size() : 0)
+                          << (haveRenderData ? renderData.cells.size() : 0) << " fluidInView " << (haveRenderData ? renderData.fluidParticles.size() : 0)
+                          << ", attacks " << (haveRenderData ? renderData.attackEvents.size() : 0) << ", geomPts " << geomStreamer.lastPointCount()
                           << std::endl;
                 lastReportTimestep = timestep;
                 lastReportTime = now;
