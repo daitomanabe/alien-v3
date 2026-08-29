@@ -48,10 +48,12 @@ int main(int argc, char** argv)
         CLI::App app{"Headless ALIEN server: runs a simulation and streams statistics/events via OSC plus render geometry via UDP. v" + Const::ProgramVersion};
 
         std::string inputFilename;
-        std::string oscHost = "127.0.0.1";
-        int oscPort = 57120;
+        std::string oscHost;
+        int oscPort = 0;
+        int oscListen = 12000;
         std::string geomHost;
         int geomPort = 0;
+        int geomListen = 12001;
         double rate = 20.0;
         int tpsCap = 0;
         int maxAttacks = 48;
@@ -59,10 +61,12 @@ int main(int argc, char** argv)
         int maxGeomCells = 2000;
         int maxGeomFluid = 2000;
         app.add_option("-i", inputFilename, "Simulation input file.")->required();
-        app.add_option("--osc-host", oscHost, "OSC destination host (SuperCollider).");
-        app.add_option("--osc-port", oscPort, "OSC destination port (sclang default 57120).");
-        app.add_option("--geom-host", geomHost, "Geometry stream destination host (empty = disabled).");
-        app.add_option("--geom-port", geomPort, "Geometry stream destination port.");
+        app.add_option("--osc-listen", oscListen, "UDP port for OSC subscribers; any datagram subscribes its sender.");
+        app.add_option("--osc-host", oscHost, "Optional fixed OSC destination host (push mode, e.g. localhost tests).");
+        app.add_option("--osc-port", oscPort, "Optional fixed OSC destination port.");
+        app.add_option("--geom-listen", geomListen, "UDP port for geometry subscribers.");
+        app.add_option("--geom-host", geomHost, "Optional fixed geometry destination host.");
+        app.add_option("--geom-port", geomPort, "Optional fixed geometry destination port.");
         app.add_option("--rate", rate, "Send rate in Hz.");
         app.add_option("--tps", tpsCap, "Cap simulation speed in timesteps per second (0 = unlimited).");
         app.add_option("--max-attacks", maxAttacks, "Max attack events sent per tick.");
@@ -88,11 +92,8 @@ int main(int argc, char** argv)
         auto worldSize = simulationFacade->getWorldSize();
         RealRect worldRect{{0.0f, 0.0f}, {static_cast<float>(worldSize.x), static_cast<float>(worldSize.y)}};
 
-        UdpSender oscSender(oscHost, oscPort);
-        std::unique_ptr<GeomStreamer> geomStreamer;
-        if (!geomHost.empty() && geomPort > 0) {
-            geomStreamer = std::make_unique<GeomStreamer>(geomHost, geomPort, maxGeomCells, maxGeomFluid);
-        }
+        UdpChannel oscChannel(oscListen, oscHost, oscPort);
+        GeomStreamer geomStreamer(geomListen, geomHost, geomPort, maxGeomCells, maxGeomFluid);
 
         if (tpsCap > 0) {
             simulationFacade->setTpsRestriction(tpsCap);
@@ -101,11 +102,8 @@ int main(int argc, char** argv)
         std::signal(SIGINT, handleSignal);
         std::signal(SIGTERM, handleSignal);
 
-        std::cout << "Streaming OSC to " << oscHost << ":" << oscPort;
-        if (geomStreamer) {
-            std::cout << ", geometry to " << geomHost << ":" << geomPort;
-        }
-        std::cout << " at " << rate << " Hz. World " << worldSize.x << "x" << worldSize.y << ". Ctrl-C stops." << std::endl;
+        std::cout << "OSC subscribers on udp/" << oscListen << ", geometry subscribers on udp/" << geomListen << ", rate " << rate << " Hz. World "
+                  << worldSize.x << "x" << worldSize.y << ". Ctrl-C stops." << std::endl;
 
         simulationFacade->runSimulation();
 
@@ -121,6 +119,13 @@ int main(int argc, char** argv)
             std::this_thread::sleep_until(nextTick);
 
             simulationFacade->checkAndThrowException();
+
+            if (oscChannel.poll()) {
+                std::cout << "OSC subscriber: " << oscChannel.targetString() << std::endl;
+            }
+            if (geomStreamer.channel().poll()) {
+                std::cout << "Geometry subscriber: " << geomStreamer.channel().targetString() << std::endl;
+            }
 
             auto statistics = simulationFacade->getStatisticsEntry();
             auto haveRenderData = simulationFacade->tryExtractRenderDataToHost(renderData, worldRect);
@@ -164,7 +169,7 @@ int main(int argc, char** argv)
                 bundle.add(msg);
             }
 
-            oscSender.send(bundle.encode());
+            oscChannel.send(bundle.encode());
 
             if (haveRenderData) {
                 // Separate bundle so each UDP datagram stays below one MTU
@@ -193,11 +198,11 @@ int main(int argc, char** argv)
                     msg.addFloat(detonation.pos[0]).addFloat(detonation.pos[1]).addFloat(detonation.radius);
                     eventBundle.add(msg);
                 }
-                oscSender.send(eventBundle.encode());
+                oscChannel.send(eventBundle.encode());
             }
 
-            if (geomStreamer && haveRenderData) {
-                geomStreamer->sendFrame(renderData);
+            if (haveRenderData) {
+                geomStreamer.sendFrame(renderData);
             }
 
             auto now = std::chrono::steady_clock::now();

@@ -30,14 +30,19 @@
 class GeomStreamer
 {
 public:
-    GeomStreamer(std::string const& host, int port, int maxCells, int maxFluid)
-        : _sender(host, port)
+    GeomStreamer(int listenPort, std::string const& initialHost, int initialPort, int maxCells, int maxFluid)
+        : _sender(listenPort, initialHost, initialPort)
         , _maxCells(maxCells)
         , _maxFluid(maxFluid)
     {}
 
+    UdpChannel& channel() { return _sender; }
+
     void sendFrame(HostRenderData const& renderData)
     {
+        if (!_sender.hasTarget()) {
+            return;
+        }
         _points.clear();
         samplePoints(renderData);
 
@@ -117,7 +122,7 @@ private:
         buffer.insert(buffer.end(), bytes, bytes + 2);
     }
 
-    UdpSender _sender;
+    UdpChannel _sender;
     int _maxCells = 0;
     int _maxFluid = 0;
     uint32_t _frameId = 0;

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -105,39 +106,99 @@ private:
     std::vector<std::vector<uint8_t>> _encodedMessages;
 };
 
-class UdpSender
+// UDP channel that learns its destination from inbound "hello" datagrams.
+// Reason: on this deployment the receiver (Mac) can reach the GPU host through
+// a shared tailnet node, but flows initiated by the GPU host are dropped.
+// Replies on a flow the receiver opened do pass, so the receiver subscribes by
+// sending any datagram to our listen port and we stream back to its source
+// address. An optional initial host:port supports plain push (e.g. localhost).
+class UdpChannel
 {
 public:
-    UdpSender(std::string const& host, int port)
+    UdpChannel(int listenPort, std::string const& initialHost = {}, int initialPort = 0)
     {
-        addrinfo hints{};
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_DGRAM;
-        addrinfo* info = nullptr;
-        if (getaddrinfo(host.c_str(), std::to_string(port).c_str(), &hints, &info) != 0 || !info) {
-            throw std::runtime_error("Cannot resolve host: " + host);
-        }
-        std::memcpy(&_target, info->ai_addr, info->ai_addrlen);
-        _targetLen = info->ai_addrlen;
-        freeaddrinfo(info);
-
         _socket = socket(AF_INET, SOCK_DGRAM, 0);
         if (_socket < 0) {
             throw std::runtime_error("Cannot create UDP socket");
         }
+
+        if (listenPort > 0) {
+            sockaddr_in bindAddr{};
+            bindAddr.sin_family = AF_INET;
+            bindAddr.sin_addr.s_addr = INADDR_ANY;
+            bindAddr.sin_port = htons(static_cast<uint16_t>(listenPort));
+            if (bind(_socket, reinterpret_cast<sockaddr*>(&bindAddr), sizeof(bindAddr)) < 0) {
+                close(_socket);
+                throw std::runtime_error("Cannot bind UDP port " + std::to_string(listenPort));
+            }
+        }
+
+        auto flags = fcntl(_socket, F_GETFL, 0);
+        fcntl(_socket, F_SETFL, flags | O_NONBLOCK);
+
+        if (!initialHost.empty() && initialPort > 0) {
+            addrinfo hints{};
+            hints.ai_family = AF_INET;
+            hints.ai_socktype = SOCK_DGRAM;
+            addrinfo* info = nullptr;
+            if (getaddrinfo(initialHost.c_str(), std::to_string(initialPort).c_str(), &hints, &info) != 0 || !info) {
+                close(_socket);
+                throw std::runtime_error("Cannot resolve host: " + initialHost);
+            }
+            std::memcpy(&_target, info->ai_addr, info->ai_addrlen);
+            _targetLen = info->ai_addrlen;
+            freeaddrinfo(info);
+        }
     }
 
-    ~UdpSender()
+    ~UdpChannel()
     {
         if (_socket >= 0) {
             close(_socket);
         }
     }
 
-    UdpSender(UdpSender const&) = delete;
-    UdpSender& operator=(UdpSender const&) = delete;
+    UdpChannel(UdpChannel const&) = delete;
+    UdpChannel& operator=(UdpChannel const&) = delete;
 
-    void send(std::vector<uint8_t> const& data) const { sendto(_socket, data.data(), data.size(), 0, reinterpret_cast<sockaddr const*>(&_target), _targetLen); }
+    // Drain inbound datagrams; the most recent sender becomes the target.
+    // Returns true if a new subscriber address was learned.
+    bool poll()
+    {
+        auto newSubscriber = false;
+        uint8_t buffer[512];
+        sockaddr_storage from{};
+        socklen_t fromLen = sizeof(from);
+        while (recvfrom(_socket, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from), &fromLen) > 0) {
+            if (fromLen != _targetLen || std::memcmp(&from, &_target, fromLen) != 0) {
+                std::memcpy(&_target, &from, fromLen);
+                _targetLen = fromLen;
+                newSubscriber = true;
+            }
+            fromLen = sizeof(from);
+        }
+        return newSubscriber;
+    }
+
+    bool hasTarget() const { return _targetLen > 0; }
+
+    std::string targetString() const
+    {
+        if (!hasTarget()) {
+            return "(none)";
+        }
+        auto const& addr = reinterpret_cast<sockaddr_in const&>(_target);
+        char host[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr.sin_addr, host, sizeof(host));
+        return std::string(host) + ":" + std::to_string(ntohs(addr.sin_port));
+    }
+
+    void send(std::vector<uint8_t> const& data) const
+    {
+        if (hasTarget()) {
+            sendto(_socket, data.data(), data.size(), 0, reinterpret_cast<sockaddr const*>(&_target), _targetLen);
+        }
+    }
 
 private:
     int _socket = -1;
