@@ -241,10 +241,15 @@ int main(int argc, char** argv)
             if (now - lastReportTime > std::chrono::seconds(5)) {
                 auto timestep = simulationFacade->getCurrentTimestep();
                 auto tps = simulationFacade->getTps();
-                std::cout << "timestep " << timestep << " (" << tps << " TPS), cells " << objects.numCellObjects << ", cellsInView "
-                          << (haveRenderData ? renderData.cells.size() : 0) << " fluidInView " << (haveRenderData ? renderData.fluidParticles.size() : 0)
-                          << ", attacks " << (haveRenderData ? renderData.attackEvents.size() : 0) << ", geomPts " << geomStreamer.lastPointCount()
-                          << " geomLines " << geomStreamer.lastLineCount() << std::endl;
+                uint64_t numCreatures = 0;
+                for (auto const& lineage : statistics.lineageEntries) {
+                    numCreatures += lineage.numCreatures;
+                }
+                std::cout << "timestep " << timestep << " (" << tps << " TPS), cells " << objects.numCellObjects << ", creatures " << numCreatures
+                          << " in " << statistics.lineageEntries.size() << " lineages, cellsInView " << (haveRenderData ? renderData.cells.size() : 0)
+                          << " fluidInView " << (haveRenderData ? renderData.fluidParticles.size() : 0) << ", attacks "
+                          << (haveRenderData ? renderData.attackEvents.size() : 0) << ", geomPts " << geomStreamer.lastPointCount() << " geomLines "
+                          << geomStreamer.lastLineCount() << std::endl;
                 lastReportTimestep = timestep;
                 lastReportTime = now;
             }

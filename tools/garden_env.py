@@ -102,29 +102,33 @@ def spiral_point(cx, cy, r0, r1, turns, t):
 
 
 def design_vortex(p: Params, world_w, world_h):
+    """v2: dispersal restored. The upstream garden spreads offspring with
+    gravity and storms; a weightless vortex turned every plant into one
+    giant unsplit tree. Here strong rotation, storm-grade arm gusts and a
+    central maw carry offspring to new ground."""
     cx, cy = world_w / 2, world_h / 2
     r_out = min(world_w, world_h) * 0.45
 
-    # L0 the whole world breathes (slow, large-scale Perlin)
-    apply_layer(p, 0, "Breath", (cx, cy), ("rect", world_w, world_h), 0, ("perlin", 0.004, 140, 8000))
-    # L1 the vortex: slow clockwise rotation over most of the garden
-    apply_layer(p, 1, "Vortex", (cx, cy), ("circ", r_out * 0.78), r_out * 0.3, ("radial", 0.004, CW, 0.0))
+    # L0 the whole world breathes (visible large-scale Perlin churn)
+    apply_layer(p, 0, "Breath", (cx, cy), ("rect", world_w, world_h), 0, ("perlin", 0.010, 120, 6000))
+    # L1 the vortex: storm-grade clockwise rotation over most of the garden
+    apply_layer(p, 1, "Vortex", (cx, cy), ("circ", r_out * 0.85), r_out * 0.25, ("radial", 0.05, CW, 0.0))
     # L2 lively core turbulence
-    apply_layer(p, 2, "Core", (cx, cy), ("circ", r_out * 0.2), r_out * 0.12, ("perlin", 0.012, 60, 3000))
-    # L3..L5 arm winds: linear gusts tangential to the spiral arms
+    apply_layer(p, 2, "Core", (cx, cy), ("circ", r_out * 0.22), r_out * 0.12, ("perlin", 0.02, 50, 3000))
+    # L3..L5 arm winds: storm-grade gusts tangential to the spiral arms
     for k, (idx, t) in enumerate([(3, 0.35), (4, 0.6), (5, 0.85)]):
         x, y, theta = spiral_point(cx, cy, r_out * 0.15, r_out, 2.6, t)
         tangent_deg = math.degrees(theta + math.pi / 2) % 360
-        apply_layer(p, idx, f"Arm wind {chr(65 + k)}", (x, y), ("circ", 230), 180, ("linear", 0.0004, tangent_deg))
-    # L6 quiet rim (no force override)
-    apply_layer(p, 6, "Calm rim", (cx, cy + r_out * 1.1), ("circ", 200), 100, "off")
+        apply_layer(p, idx, f"Arm wind {chr(65 + k)}", (x, y), ("circ", 260), 200, ("linear", 0.004, tangent_deg))
+    # L6 the maw: a narrow central sink (Central decays ~1/r^2, so this only bites nearby)
+    apply_layer(p, 6, "Maw", (cx, cy), ("circ", 160), 220, ("central", 3.0))
     # L7 keeps its inherited role but is parked away, field off (was disabled upstream)
     apply_layer(p, 7, "Parked", (world_w * 0.05, world_h * 0.95), ("circ", 100), 50, "off")
     # L8/L9 inherited ground ecology (food-chain overrides), re-seated on the spiral
     x8, y8, _ = spiral_point(cx, cy, r_out * 0.15, r_out, 2.6, 0.25)
     x9, y9, _ = spiral_point(cx, cy, r_out * 0.15, r_out, 2.6, 0.75)
-    apply_layer(p, 8, "Soil inner", (x8, y8), ("circ", 320), 220, "off")
-    apply_layer(p, 9, "Soil outer", (x9, y9), ("circ", 320), 220, "off")
+    apply_layer(p, 8, "Soil inner", (x8, y8), ("circ", 360), 240, "off")
+    apply_layer(p, 9, "Soil outer", (x9, y9), ("circ", 360), 240, "off")
     # L10 inherited "Size Bonus" sits on the core
     apply_layer(p, 10, "Core bonus", (cx, cy), ("circ", r_out * 0.22), r_out * 0.1, "off")
 
