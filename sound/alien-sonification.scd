@@ -107,6 +107,7 @@ s.waitForBoot({
 	~attackMax = 1.0;
 	~mutMax = 1.0;
 	~popMax = 10.0;
+	~cellsMax = 100.0;
 
 	// color bitset (7 ecosystem colors) -> base pitch class offsets, one entry per color
 	~colorPitch = [0, 3, 5, 7, 10, 14, 17];
@@ -149,6 +150,7 @@ s.waitForBoot({
 		~attackMax = max(~attackMax * 0.9995, attack);
 		~mutMax = max(~mutMax * 0.9995, mut);
 		~popMax = max(~popMax * 0.9998, pop);
+		~cellsMax = max(~cellsMax * 0.9998, cells);
 
 		// find or assign slot
 		slot = ~slotLineage.indexOf(id);
@@ -165,7 +167,9 @@ s.waitForBoot({
 		colorIdx = 0;
 		7.do({ |i| if(colorBits.bitTest(i), { colorIdx = i }) });
 		freq = (30 + ~colorPitch[colorIdx] + ((slot % 4) * 12)).midicps * (2 ** (gen.clip(0, 3000) / 1500));
-		amp = (pop / ~popMax).sqrt * 0.14;
+		// a voice is loud when its lineage is either numerous (swarms) or massive
+		// (a few giant plants, e.g. the vortex garden's unsplit trees)
+		amp = max((pop / ~popMax).sqrt, (cells / ~cellsMax).sqrt) * 0.14;
 		shimmer = (muscle / ~muscleMax).clip(0, 1);
 		grit = (attack / ~attackMax).clip(0, 1) * 0.5;
 		detune = (mut / ~mutMax).clip(0, 1);
