@@ -90,6 +90,27 @@ GCC 11 ホスト対応のため `std::views::zip` は `aliencompat::zip`(source/
 - `SimulationCudaFacade::extractRenderDataToHost` / `SimulationFacade::tryExtractRenderDataToHost`
 - `source/Server/` — alien_server 本体(OSC エンコーダ・ジオメトリストリーマ込み、依存追加なし)
 
+## 庭を自作する(alien_genesis)
+
+```bash
+# 1. 既存シーンを解剖 → parameters.json + 種ライブラリ(creature-*.content / genome-*.genome)
+./alien_genesis dump -i scenes/hanging-garden.sim -o garden-dump --top 4
+
+# 2. プロシージャル生成: サインカーブの棚 + 垂下する蔓 + 種まき + 流体の海 + エネルギー
+./alien_genesis new -o scenes/my-garden.sim \
+  --params garden-dump/parameters.json \
+  --seed garden-dump/creature-0.content --seed garden-dump/creature-1.content \
+  --world 5000x1500 --shelves 4 --amplitude 55 --wavelength 800 \
+  --tendrils 16 --seeds 12 --fluid 80000 --energy 3000 --rng 42
+```
+
+- 種は元シーンの単細胞生物(2遺伝子)。播種時に株ごとに lineageId(=音の声部)と色
+  (=ピッチクラス/差し色)を振り分ける
+- パラメータ JSON の Layer/放射源座標は元の世界サイズ前提。世界サイズを変える場合は
+  JSON の座標も編集すること
+- 抽出時に生物→棚のアンカー接続は切断される(参照先が無くなり
+  `DescConverterService::setConnections` が落ちるため)
+
 ## シーン
 
 alien-project.org の公式ブラウザ API から取得(現行 alpha.26 対応版):
