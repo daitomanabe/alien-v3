@@ -274,6 +274,12 @@ void CudaGeometryBuffers::copyToHost(HostRenderData& result, NumRenderObjects co
             result.fluidParticles.data(), deviceFluidParticleBuffer, numObjects.fluidParticles * sizeof(FluidParticleVertexData), cudaMemcpyDeviceToHost));
     }
 
+    result.lineIndices.resize(numObjects.lineIndices);
+    if (numObjects.lineIndices > 0) {
+        CHECK_FOR_DEVICE_ERRORS(
+            cudaMemcpy(result.lineIndices.data(), deviceLineIndexBuffer, numObjects.lineIndices * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+    }
+
     result.attackEvents.resize(numObjects.attackEventVertices);
     if (numObjects.attackEventVertices > 0) {
         CHECK_FOR_DEVICE_ERRORS(cudaMemcpy(

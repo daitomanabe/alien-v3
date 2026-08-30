@@ -60,6 +60,7 @@ int main(int argc, char** argv)
         int maxLineages = 8;
         int maxGeomCells = 2000;
         int maxGeomFluid = 2000;
+        int maxGeomLines = 1500;
         app.add_option("-i", inputFilename, "Simulation input file.")->required();
         app.add_option("--osc-listen", oscListen, "UDP port for OSC subscribers; any datagram subscribes its sender.");
         app.add_option("--osc-host", oscHost, "Optional fixed OSC destination host (push mode, e.g. localhost tests).");
@@ -73,6 +74,7 @@ int main(int argc, char** argv)
         app.add_option("--max-lineages", maxLineages, "Max lineages sent per tick (largest first).");
         app.add_option("--geom-cells", maxGeomCells, "Max sampled cells per geometry frame.");
         app.add_option("--geom-fluid", maxGeomFluid, "Max sampled fluid particles per geometry frame.");
+        app.add_option("--geom-lines", maxGeomLines, "Max sampled cell-connection lines per geometry frame.");
         CLI11_PARSE(app, argc, argv);
 
         std::cout << "Reading " << inputFilename << std::endl;
@@ -93,7 +95,7 @@ int main(int argc, char** argv)
         RealRect worldRect{{0.0f, 0.0f}, {static_cast<float>(worldSize.x), static_cast<float>(worldSize.y)}};
 
         UdpChannel oscChannel(oscListen, oscHost, oscPort);
-        GeomStreamer geomStreamer(geomListen, geomHost, geomPort, maxGeomCells, maxGeomFluid);
+        GeomStreamer geomStreamer(geomListen, geomHost, geomPort, maxGeomCells, maxGeomFluid, maxGeomLines);
 
         if (tpsCap > 0) {
             simulationFacade->setTpsRestriction(tpsCap);
@@ -120,11 +122,20 @@ int main(int argc, char** argv)
 
             simulationFacade->checkAndThrowException();
 
-            if (oscChannel.poll()) {
-                std::cout << "OSC subscriber: " << oscChannel.targetString() << std::endl;
+            auto oscPollResult = oscChannel.poll();
+            if (oscPollResult.subscribersChanged) {
+                std::cout << "OSC subscribers: " << oscChannel.targetString() << std::endl;
             }
-            if (geomStreamer.channel().poll()) {
-                std::cout << "Geometry subscriber: " << geomStreamer.channel().targetString() << std::endl;
+            if (geomStreamer.channel().poll().subscribersChanged) {
+                std::cout << "Geometry subscribers: " << geomStreamer.channel().targetString() << std::endl;
+            }
+            for (auto const& command : oscPollResult.commands) {
+                if (command == "/alien/cataclysm") {
+                    std::cout << "Command: cataclysm" << std::endl;
+                    simulationFacade->applyCataclysm(1);
+                } else {
+                    std::cout << "Unknown command: " << command << std::endl;
+                }
             }
 
             auto statistics = simulationFacade->getStatisticsEntry();
@@ -212,7 +223,7 @@ int main(int argc, char** argv)
                 std::cout << "timestep " << timestep << " (" << tps << " TPS), cells " << objects.numCellObjects << ", cellsInView "
                           << (haveRenderData ? renderData.cells.size() : 0) << " fluidInView " << (haveRenderData ? renderData.fluidParticles.size() : 0)
                           << ", attacks " << (haveRenderData ? renderData.attackEvents.size() : 0) << ", geomPts " << geomStreamer.lastPointCount()
-                          << std::endl;
+                          << " geomLines " << geomStreamer.lastLineCount() << std::endl;
                 lastReportTimestep = timestep;
                 lastReportTime = now;
             }

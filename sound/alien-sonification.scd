@@ -60,10 +60,12 @@ s.waitForBoot({
 	}).add;
 
 	SynthDef(\masterBus, {
-		|out = 0, in = 0, cutoff = 8000, verbMix = 0.25, verbRoom = 0.6|
-		var sig;
-		sig = In.ar(in, 2);
-		sig = LPF.ar(sig, cutoff.lag(1.5));
+		|out = 0, droneIn = 0, eventIn = 0, cutoff = 8000, verbMix = 0.25, verbRoom = 0.6|
+		var drones, events, sig;
+		// energy-driven low-pass shapes only the drones; percussive events keep their transients
+		drones = LPF.ar(In.ar(droneIn, 2), cutoff.lag(1.5));
+		events = In.ar(eventIn, 2);
+		sig = drones + events;
 		sig = FreeVerb2.ar(sig[0], sig[1], verbMix.lag(2), verbRoom.lag(2), 0.4);
 		sig = Limiter.ar(sig, 0.9);
 		ReplaceOut.ar(out, sig);
@@ -73,7 +75,8 @@ s.waitForBoot({
 
 	// ---------- state ----------
 	~droneBus = Bus.audio(s, 2);
-	~master = Synth(\masterBus, [\in, ~droneBus, \out, 0], addAction: \addToTail);
+	~eventBus = Bus.audio(s, 2);
+	~master = Synth(\masterBus, [\droneIn, ~droneBus, \eventIn, ~eventBus, \out, 0], addAction: \addToTail);
 
 	~slots = Array.newClear(numSlots);          // slot -> synth
 	~slotLineage = Array.fill(numSlots, -1);    // slot -> lineageId
@@ -99,8 +102,9 @@ s.waitForBoot({
 		energy = msg[4].asFloat;
 		tps = msg[5].asFloat;
 		// more total energy -> brighter master; huge worlds get roomier verb
-		~master.set(\cutoff, energy.linexp(1e4, 1e7, 900, 12000).clip(300, 16000));
-		~master.set(\verbMix, numCells.linlin(0, 40000, 0.15, 0.45).clip(0.1, 0.5));
+		// (range tuned to Hanging Garden: totalEnergy sits around 1.5e4..1e5)
+		~master.set(\cutoff, energy.linexp(5e3, 2e5, 1200, 9000).clip(300, 16000));
+		~master.set(\verbMix, numCells.linlin(0, 100000, 0.15, 0.45).clip(0.1, 0.5));
 		~attackBudget = 12;
 	}, '/alien/stats');
 
@@ -164,7 +168,7 @@ s.waitForBoot({
 			y = msg[2].asFloat;
 			pan = (x / ~worldW * 2 - 1).clip(-1, 1);
 			freq = y.linexp(0, ~worldH, 2400, 300);
-			Synth(\attackTick, [\pan, pan, \freq, freq, \amp, 0.12], addAction: \addToHead);
+			Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, 0.12], addAction: \addToHead);
 		});
 	}, '/alien/attack');
 
@@ -173,7 +177,7 @@ s.waitForBoot({
 		x = msg[1].asFloat;
 		radius = msg[3].asFloat;
 		pan = (x / ~worldW * 2 - 1).clip(-1, 1);
-		Synth(\detonationBoom, [\pan, pan, \amp, 0.4, \dur, radius.linlin(0, 30, 0.4, 1.6)]);
+		Synth(\detonationBoom, [\out, ~eventBus, \pan, pan, \amp, 0.4, \dur, radius.linlin(0, 30, 0.4, 1.6)], addAction: \addToHead);
 	}, '/alien/detonation');
 
 	// subscribe + keepalive so the server learns/refreshes our return address

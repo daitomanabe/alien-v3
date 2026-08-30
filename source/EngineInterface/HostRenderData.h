@@ -13,6 +13,7 @@ struct HostRenderData
     uint64_t timestep = 0;
     std::vector<ObjectVertexData> cells;
     std::vector<FluidParticleVertexData> fluidParticles;
+    std::vector<unsigned int> lineIndices;  // index pairs into cells (cell-cell connections)
     std::vector<AttackEventVertexData> attackEvents;
     std::vector<DetonationEventVertexData> detonationEvents;
 };

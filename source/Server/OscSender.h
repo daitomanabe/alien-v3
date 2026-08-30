@@ -3,6 +3,7 @@
 // Minimal OSC 1.0 encoder and UDP sender: int32/float32/string arguments and
 // bundles of messages. Just enough to talk to SuperCollider (sclang/scsynth).
 
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -106,12 +107,14 @@ private:
     std::vector<std::vector<uint8_t>> _encodedMessages;
 };
 
-// UDP channel that learns its destination from inbound "hello" datagrams.
-// Reason: on this deployment the receiver (Mac) can reach the GPU host through
-// a shared tailnet node, but flows initiated by the GPU host are dropped.
-// Replies on a flow the receiver opened do pass, so the receiver subscribes by
-// sending any datagram to our listen port and we stream back to its source
-// address. An optional initial host:port supports plain push (e.g. localhost).
+// UDP channel that learns its destinations from inbound "hello" datagrams.
+// Reason: on this deployment the receivers (Mac) can reach the GPU host
+// through a shared tailnet node, but flows initiated by the GPU host are
+// dropped. Replies on a flow the receiver opened do pass, so each receiver
+// subscribes by sending any datagram to our listen port and we stream back to
+// its source address. Multiple subscribers (e.g. SuperCollider + a parameter
+// monitor) are kept alive by their periodic hellos and expire after 30 s.
+// Inbound datagrams that carry an OSC address are also surfaced as commands.
 class UdpChannel
 {
 public:
@@ -145,8 +148,11 @@ public:
                 close(_socket);
                 throw std::runtime_error("Cannot resolve host: " + initialHost);
             }
-            std::memcpy(&_target, info->ai_addr, info->ai_addrlen);
-            _targetLen = info->ai_addrlen;
+            Subscriber sub{};
+            std::memcpy(&sub.addr, info->ai_addr, info->ai_addrlen);
+            sub.addrLen = info->ai_addrlen;
+            sub.permanent = true;
+            _subscribers.push_back(sub);
             freeaddrinfo(info);
         }
     }
@@ -161,47 +167,104 @@ public:
     UdpChannel(UdpChannel const&) = delete;
     UdpChannel& operator=(UdpChannel const&) = delete;
 
-    // Drain inbound datagrams; the most recent sender becomes the target.
-    // Returns true if a new subscriber address was learned.
-    bool poll()
+    struct PollResult
     {
-        auto newSubscriber = false;
+        bool subscribersChanged = false;
+        std::vector<std::string> commands;  // OSC addresses of inbound datagrams (e.g. "/alien/cataclysm")
+    };
+
+    // Drain inbound datagrams: refresh/add subscribers, expire stale ones,
+    // collect OSC-style command addresses.
+    PollResult poll()
+    {
+        PollResult result;
         uint8_t buffer[512];
         sockaddr_storage from{};
         socklen_t fromLen = sizeof(from);
-        while (recvfrom(_socket, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from), &fromLen) > 0) {
-            if (fromLen != _targetLen || std::memcmp(&from, &_target, fromLen) != 0) {
-                std::memcpy(&_target, &from, fromLen);
-                _targetLen = fromLen;
-                newSubscriber = true;
+        auto now = std::chrono::steady_clock::now();
+
+        ssize_t received;
+        while ((received = recvfrom(_socket, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr*>(&from), &fromLen)) > 0) {
+            // A datagram carrying a command address is a one-shot control
+            // message, not a subscription request.
+            auto isCommand = false;
+            if (received > 1 && buffer[0] == '/') {
+                auto* end = static_cast<uint8_t const*>(std::memchr(buffer, 0, received));
+                auto address = std::string(reinterpret_cast<char const*>(buffer), end ? end - buffer : received);
+                if (address != "/alien/subscribe") {
+                    result.commands.push_back(address);
+                    isCommand = true;
+                }
+            }
+
+            if (!isCommand) {
+                auto known = false;
+                for (auto& sub : _subscribers) {
+                    if (sub.addrLen == fromLen && std::memcmp(&sub.addr, &from, fromLen) == 0) {
+                        sub.lastSeen = now;
+                        known = true;
+                        break;
+                    }
+                }
+                if (!known && _subscribers.size() < MaxSubscribers) {
+                    Subscriber sub{};
+                    std::memcpy(&sub.addr, &from, fromLen);
+                    sub.addrLen = fromLen;
+                    sub.lastSeen = now;
+                    _subscribers.push_back(sub);
+                    result.subscribersChanged = true;
+                }
             }
             fromLen = sizeof(from);
         }
-        return newSubscriber;
+
+        auto before = _subscribers.size();
+        std::erase_if(_subscribers, [&](Subscriber const& sub) { return !sub.permanent && now - sub.lastSeen > SubscriberTimeout; });
+        if (_subscribers.size() != before) {
+            result.subscribersChanged = true;
+        }
+        return result;
     }
 
-    bool hasTarget() const { return _targetLen > 0; }
+    bool hasTarget() const { return !_subscribers.empty(); }
 
     std::string targetString() const
     {
-        if (!hasTarget()) {
+        if (_subscribers.empty()) {
             return "(none)";
         }
-        auto const& addr = reinterpret_cast<sockaddr_in const&>(_target);
-        char host[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr.sin_addr, host, sizeof(host));
-        return std::string(host) + ":" + std::to_string(ntohs(addr.sin_port));
+        std::string result;
+        for (auto const& sub : _subscribers) {
+            auto const& addr = reinterpret_cast<sockaddr_in const&>(sub.addr);
+            char host[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &addr.sin_addr, host, sizeof(host));
+            if (!result.empty()) {
+                result += ", ";
+            }
+            result += std::string(host) + ":" + std::to_string(ntohs(addr.sin_port));
+        }
+        return result;
     }
 
     void send(std::vector<uint8_t> const& data) const
     {
-        if (hasTarget()) {
-            sendto(_socket, data.data(), data.size(), 0, reinterpret_cast<sockaddr const*>(&_target), _targetLen);
+        for (auto const& sub : _subscribers) {
+            sendto(_socket, data.data(), data.size(), 0, reinterpret_cast<sockaddr const*>(&sub.addr), sub.addrLen);
         }
     }
 
 private:
+    static constexpr size_t MaxSubscribers = 8;
+    static constexpr std::chrono::seconds SubscriberTimeout{30};
+
+    struct Subscriber
+    {
+        sockaddr_storage addr{};
+        socklen_t addrLen = 0;
+        std::chrono::steady_clock::time_point lastSeen{};
+        bool permanent = false;
+    };
+
     int _socket = -1;
-    sockaddr_storage _target{};
-    socklen_t _targetLen = 0;
+    std::vector<Subscriber> _subscribers;
 };

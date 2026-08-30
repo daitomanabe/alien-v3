@@ -23,25 +23,26 @@ hello をくれた送信元へ返信ストリームを流す。keepalive 10 秒)
 - OSC 購読: udp/12000(sclang は langPort 57120 のソケットから送る → 返信も 57120 へ)
 - ジオメトリ購読: udp/12001
 
-## 起動手順
+## 起動手順(すべて Mac の CLI から)
 
-1. リモートでサーバ起動:
-   ```bash
-   ssh raytrek4090
-   cd ~/workspaces/alien-v3/build-ninja/Release
-   ./alien_server -i ../../scenes/hanging-garden.sim --rate 20 --tps 200
-   ```
-   `--tps` はシミュレーション速度(=音と映像のテンポ)。無制限なら 0(4090 で約 1000 TPS)。
+```bash
+scripts/alien-ctl.sh start [scene] [tps]   # リモートでサーバ起動(tmux)
+scripts/alien-ctl.sh status                # 状態確認
+scripts/alien-ctl.sh log 30                # サーバログ
+scripts/alien-ctl.sh cataclysm 3           # カタクリズム発動(捕食・爆発を誘発 → 音と朱ブロット)
+scripts/alien-ctl.sh stop                  # 停止
+```
 
-2. Mac で音:
-   ```bash
-   sclang sound/alien-sonification.scd
-   ```
+受け手(それぞれ独立に購読・同時可):
 
-3. Mac で映像:
-   ```bash
-   viz/venv/bin/python viz/alien_viz.py            # world 5000x1500 がデフォルト
-   ```
+```bash
+sclang sound/alien-sonification.scd                  # 音
+viz/venv/bin/python viz/alien_viz.py                 # 映像(インク・ルック。--look glow で発光系)
+viz/venv/bin/python sound/param_monitor.py           # 音響パラメータのリアルタイムグラフ
+```
+
+`param_monitor.py --headless --export out.png --exit-after 60` で GUI なしの記録も可能。
+`--tps` はシミュレーション速度=作品のテンポ(0 で無制限、4090 で約 1000 TPS)。
 
 ## 音のマッピング(sound/alien-sonification.scd)
 
@@ -56,7 +57,21 @@ hello をくれた送信元へ返信ストリームを流す。keepalive 10 秒)
 | 系統の色 | ピッチクラス |
 | 攻撃イベント(位置つき) | クリック(x→パン、y→音域) |
 | 爆発イベント | 低域インパクト |
-| 全体エネルギー | マスターフィルタ開閉 |
+| 全体エネルギー | マスターフィルタ開閉(ドローンのみ。イベント音はトランジェント保持) |
+
+同じ OSC ストリームを `sound/param_monitor.py` が購読し、上記の全パラメータを
+マッピング名つきでリアルタイムプロットする(sound/param-graph-sample.png 参照)。
+シグナルフロー: drones → LPF ─┬→ FreeVerb2 → Limiter → out
+                events ────────┘  (ReplaceOut のバスを分離。イベントを直接 out 0 に
+                                   出すと master の ReplaceOut に消されるので注意)
+
+## 見た目(viz/alien_viz.py)
+
+- `--look ink`(デフォルト): 生成り紙に Beer-Lambert 減法混色の墨。セル=墨点(系統色を
+  微かに含む)、接続線=骨格ストローク、流体=薄い霞、**捕食=朱のブロット**、
+  にじみブラー付き残像。オリジナルのネオン調と正反対の版画的ルック。
+- `--look glow`: 黒地に加算グロー(比較用)。
+- 幾何ストリームは点(12B)+ 線分(20B)の2タイプ、チャンク UDP(欠損許容)。
 
 ## ビルド(リモート)
 
