@@ -5,6 +5,7 @@
 var patchPath = "/Users/daitomacm5/development/sandbox/alien-v3/sound/alien-sonification.scd";
 var recPath = "/Users/daitomacm5/development/sandbox/alien-v3/sound/test-capture.aiff";
 var recSeconds = (thisProcess.argv[0] ? "20").asInteger.clip(5, 600);
+~alienServerPort = (thisProcess.argv[1] ? "12000").asInteger;
 
 "TEST: loading patch, will record % s".format(recSeconds).postln;
 patchPath.load;

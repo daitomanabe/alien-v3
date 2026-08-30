@@ -16,7 +16,9 @@
 (
 // alien_server address: subscribing there makes the server stream OSC back to
 // this sclang's port (works through one-way tailnet sharing).
-~alienServerAddr = NetAddr("100.87.26.1", 12000);
+// ~alienServerPort may be preset (e.g. by test-capture.scd argv) to listen to
+// another garden: 12000 main / 12020 rain / 12030 islands.
+~alienServerAddr = NetAddr("100.87.26.1", ~alienServerPort ? 12000);
 
 s.options.numInputBusChannels = 0;
 s.options.sampleRate = 44100;
