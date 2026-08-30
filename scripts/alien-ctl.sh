@@ -7,6 +7,7 @@
 #   scripts/alien-ctl.sh log [n]               last n log lines (default 20)
 #   scripts/alien-ctl.sh scenes                list remote scene files
 #   scripts/alien-ctl.sh cataclysm [n]         trigger n cataclysm pulses (default 1) — provokes attacks/detonations
+#   scripts/alien-ctl.sh save                   snapshot the running simulation to saved-<timestep>.sim on the server
 set -euo pipefail
 
 HOST=raytrek4090
@@ -50,6 +51,18 @@ for i in range(count):
     time.sleep(0.3)
 print(f"sent {count} cataclysm pulse(s)")
 EOF
+    ;;
+  save)
+    python3 - "$SERVER_IP" "$OSC_PORT" <<'EOF'
+import socket, sys
+# OSC address "/alien/save" -> 11 chars + NUL = 12 (already 4-aligned), then ",\0\0\0"
+msg = b"/alien/save\x00,\x00\x00\x00"
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.sendto(msg, (sys.argv[1], int(sys.argv[2])))
+print("save requested (file lands in the server working dir: build-ninja/Release)")
+EOF
+    sleep 3
+    ssh "$HOST" "ls -la $REMOTE_DIR/build-ninja/Release/saved-*.sim 2>/dev/null | tail -3"
     ;;
   *)
     echo "unknown command: $cmd" >&2

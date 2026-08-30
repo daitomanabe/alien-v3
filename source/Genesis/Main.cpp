@@ -201,6 +201,8 @@ namespace
     {
         int worldW = 4000;
         int worldH = 1200;
+        std::string layout = "shelves";  // shelves | spiral
+        float spiralTurns = 2.6f;
         int shelves = 4;
         float amplitude = 50.0f;
         float wavelength = 900.0f;
@@ -242,31 +244,108 @@ namespace
 
         ContentDesc content;
 
-        // --- static shelves: sine waves spanning the world, with hanging tendrils ---
-        auto marginY = garden.worldH * 0.18f;
-        auto marginX = garden.worldW * 0.04f;
-        auto shelfSpan = garden.worldH - 2.0f * marginY;
-        for (int shelf = 0; shelf < garden.shelves; ++shelf) {
-            auto yBase = marginY + (garden.shelves > 1 ? shelfSpan * shelf / (garden.shelves - 1) : shelfSpan * 0.5f);
-            auto phase = unit(rng) * 6.2831853f;
-            for (float x = marginX; x <= garden.worldW - marginX; x += 1.0f) {
-                auto y = yBase + garden.amplitude * std::sin(6.2831853f * x / garden.wavelength + phase);
+        // seed placement targets, filled by the chosen layout
+        std::vector<RealVector2D> seedPositions;
+
+        if (garden.layout == "spiral") {
+            // --- Archimedean spiral wall with inward tendrils ---
+            auto cx = garden.worldW * 0.5f;
+            auto cy = garden.worldH * 0.5f;
+            auto rOut = std::min(garden.worldW, garden.worldH) * 0.45f;
+            auto rIn = rOut * 0.15f;
+            auto thetaMax = 6.2831853f * garden.spiralTurns;
+            auto slope = (rOut - rIn) / thetaMax;
+
+            auto arcSinceTendril = 0.0f;
+            auto tendrilSpacing = 140.0f;
+            for (float theta = 0.0f; theta < thetaMax;) {
+                auto r = rIn + slope * theta;
+                auto x = cx + r * std::cos(theta);
+                auto y = cy + r * std::sin(theta);
                 addSolidPoint(content, x, y, garden.shelfColor);
-            }
-            for (int tendril = 0; tendril < garden.tendrilsPerShelf; ++tendril) {
-                auto tx = marginX + unit(rng) * (garden.worldW - 2.0f * marginX);
-                auto ty = yBase + garden.amplitude * std::sin(6.2831853f * tx / garden.wavelength + phase);
-                auto length = garden.tendrilLength * (0.4f + 0.6f * unit(rng));
-                for (float d = 1.0f; d <= length; d += 1.0f) {
-                    auto sway = 6.0f * std::sin(d * 0.15f + tendril);
-                    addSolidPoint(content, tx + sway, ty + d, garden.shelfColor);
+
+                arcSinceTendril += 1.0f;
+                if (arcSinceTendril >= tendrilSpacing && garden.tendrilsPerShelf > 0) {
+                    arcSinceTendril = 0.0f;
+                    auto length = garden.tendrilLength * (0.4f + 0.6f * unit(rng));
+                    auto dirX = (cx - x) / std::max(r, 1.0f);
+                    auto dirY = (cy - y) / std::max(r, 1.0f);
+                    for (float d = 2.0f; d <= length; d += 1.0f) {
+                        auto sway = 5.0f * std::sin(d * 0.17f + theta);
+                        addSolidPoint(content, x + dirX * d - dirY * sway, y + dirY * d + dirX * sway, garden.shelfColor);
+                    }
                 }
+                theta += 1.0f / std::sqrt(r * r + slope * slope);
+            }
+
+            for (int i = 0; i < garden.numSeeds; ++i) {
+                auto t = (i + 0.5f) / garden.numSeeds;
+                auto theta = thetaMax * t;
+                auto r = rIn + slope * theta - 14.0f;  // just inside the wall
+                seedPositions.push_back({cx + r * std::cos(theta), cy + r * std::sin(theta)});
+            }
+
+            // fluid: dense mist near the core, thinning outwards, plus a faint global haze
+            for (int i = 0; i < garden.fluidParticles; ++i) {
+                auto object = ObjectDesc();
+                if (unit(rng) < 0.75f) {
+                    auto r = rOut * std::pow(unit(rng), 1.6f);
+                    auto a = unit(rng) * 6.2831853f;
+                    object.pos({cx + r * std::cos(a), cy + r * std::sin(a)});
+                } else {
+                    object.pos({unit(rng) * garden.worldW, unit(rng) * garden.worldH});
+                }
+                object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
+                object.color(garden.shelfColor);
+                object.type(FluidDesc());
+                content._objects.push_back(object);
+            }
+        } else {
+            // --- static shelves: sine waves spanning the world, with hanging tendrils ---
+            auto marginY = garden.worldH * 0.18f;
+            auto marginX = garden.worldW * 0.04f;
+            auto shelfSpan = garden.worldH - 2.0f * marginY;
+            for (int shelf = 0; shelf < garden.shelves; ++shelf) {
+                auto yBase = marginY + (garden.shelves > 1 ? shelfSpan * shelf / (garden.shelves - 1) : shelfSpan * 0.5f);
+                auto phase = unit(rng) * 6.2831853f;
+                for (float x = marginX; x <= garden.worldW - marginX; x += 1.0f) {
+                    auto y = yBase + garden.amplitude * std::sin(6.2831853f * x / garden.wavelength + phase);
+                    addSolidPoint(content, x, y, garden.shelfColor);
+                }
+                for (int tendril = 0; tendril < garden.tendrilsPerShelf; ++tendril) {
+                    auto tx = marginX + unit(rng) * (garden.worldW - 2.0f * marginX);
+                    auto ty = yBase + garden.amplitude * std::sin(6.2831853f * tx / garden.wavelength + phase);
+                    auto length = garden.tendrilLength * (0.4f + 0.6f * unit(rng));
+                    for (float d = 1.0f; d <= length; d += 1.0f) {
+                        auto sway = 6.0f * std::sin(d * 0.15f + tendril);
+                        addSolidPoint(content, tx + sway, ty + d, garden.shelfColor);
+                    }
+                }
+            }
+
+            for (int i = 0; i < garden.numSeeds; ++i) {
+                auto x = marginX + (garden.worldW - 2.0f * marginX) * (i + 0.5f) / garden.numSeeds;
+                auto shelfIdx = i % std::max(1, garden.shelves);
+                auto yBase = marginY + (garden.shelves > 1 ? shelfSpan * shelfIdx / (garden.shelves - 1) : shelfSpan * 0.5f);
+                seedPositions.push_back({x, yBase - garden.tendrilLength * 0.8f - 15.0f});
+            }
+
+            // fluid sea: thin haze everywhere, denser towards the bottom third
+            for (int i = 0; i < garden.fluidParticles; ++i) {
+                auto object = ObjectDesc();
+                auto inLowerSea = unit(rng) < 0.7f;
+                auto y = inLowerSea ? garden.worldH * (0.66f + 0.34f * unit(rng)) : garden.worldH * unit(rng);
+                object.pos({unit(rng) * garden.worldW, y});
+                object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
+                object.color(garden.shelfColor);
+                object.type(FluidDesc());
+                content._objects.push_back(object);
             }
         }
 
         // --- seeds: creatures from the library, one lineage and color per plant ---
         if (!seedFiles.empty() && garden.numSeeds > 0) {
-            for (int i = 0; i < garden.numSeeds; ++i) {
+            for (int i = 0; i < garden.numSeeds && i < static_cast<int>(seedPositions.size()); ++i) {
                 ContentDesc seed;
                 auto const& seedFile = seedFiles[i % seedFiles.size()];
                 if (!SerializerService::get().deserializeContentFromFile(seed, seedFile)) {
@@ -279,29 +358,11 @@ namespace
                 for (auto& creature : seed._creatures) {
                     creature.lineageId(i + 1);
                 }
-
-                // place between shelves, horizontally spread
-                auto x = marginX + (garden.worldW - 2.0f * marginX) * (i + 0.5f) / garden.numSeeds;
-                auto shelfIdx = i % std::max(1, garden.shelves);
-                auto yBase = marginY + (garden.shelves > 1 ? shelfSpan * shelfIdx / (garden.shelves - 1) : shelfSpan * 0.5f);
-                auto y = yBase - garden.tendrilLength * 0.8f - 15.0f;
                 for (auto& object : seed._objects) {
-                    object._pos += RealVector2D{x, y};
+                    object._pos += seedPositions[i];
                 }
                 content.add(std::move(seed), true);
             }
-        }
-
-        // --- fluid sea: thin haze everywhere, denser towards the bottom third ---
-        for (int i = 0; i < garden.fluidParticles; ++i) {
-            auto object = ObjectDesc();
-            auto inLowerSea = unit(rng) < 0.7f;
-            auto y = inLowerSea ? garden.worldH * (0.66f + 0.34f * unit(rng)) : garden.worldH * unit(rng);
-            object.pos({unit(rng) * garden.worldW, y});
-            object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
-            object.color(garden.shelfColor);
-            object.type(FluidDesc());
-            content._objects.push_back(object);
         }
 
         // --- energy particles everywhere ---
@@ -388,6 +449,8 @@ int main(int argc, char** argv)
         create->add_option("--params", paramsFile, "SimulationParameters JSON (from dump)");
         create->add_option("--seed", seedFiles, "Seed .content file(s) from dump (repeatable)");
         create->add_option("--world", worldText, "World size WxH");
+        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral");
+        create->add_option("--turns", garden.spiralTurns, "Spiral turns (layout=spiral)");
         create->add_option("--shelves", garden.shelves, "Number of shelves");
         create->add_option("--amplitude", garden.amplitude, "Shelf wave amplitude");
         create->add_option("--wavelength", garden.wavelength, "Shelf wave length");

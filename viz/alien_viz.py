@@ -25,6 +25,8 @@ MAGIC = 0x414C4E33
 HEADER = struct.Struct("<IIHHHH")
 TYPE_POINTS = 0
 TYPE_LINES = 1
+TYPE_INFO = 2
+TYPE_STATIC = 3
 POINT_SIZE = 12
 LINE_SIZE = 20
 
@@ -41,9 +43,12 @@ class GeomReceiver:
         self.lock = threading.Lock()
         self.points = np.zeros((0, 3), dtype=np.float32)   # x, y, packed rgba(u32-as-f32)
         self.line_segs = np.zeros((0, 5), dtype=np.float32)  # x1, y1, x2, y2, packed
+        self.world = None  # (w, h) announced by the server
+        self.static_points = np.zeros((0, 3), dtype=np.float32)
+        self.static_version = 0
         self.frames = 0
-        self._chunks = {TYPE_POINTS: {}, TYPE_LINES: {}}
-        self._frame_ids = {TYPE_POINTS: -1, TYPE_LINES: -1}
+        self._chunks = {TYPE_POINTS: {}, TYPE_LINES: {}, TYPE_STATIC: {}}
+        self._frame_ids = {TYPE_POINTS: -1, TYPE_LINES: -1, TYPE_STATIC: -1}
         self._running = True
         threading.Thread(target=self._recv_loop, daemon=True).start()
         threading.Thread(target=self._keepalive_loop, daemon=True).start()
@@ -67,11 +72,19 @@ class GeomReceiver:
             if len(data) < HEADER.size:
                 continue
             magic, frame_id, chunk_idx, num_chunks, payload_len, ptype = HEADER.unpack_from(data)
-            if magic != MAGIC or ptype not in self._chunks:
+            if magic != MAGIC:
+                continue
+            if ptype == TYPE_INFO:
+                if payload_len >= 8:
+                    w, h = struct.unpack_from("<ff", data, HEADER.size)
+                    with self.lock:
+                        self.world = (w, h)
+                continue
+            if ptype not in self._chunks:
                 continue
             chunks = self._chunks[ptype]
             if frame_id != self._frame_ids[ptype]:
-                if chunks:
+                if chunks and ptype != TYPE_STATIC:
                     self._publish(ptype, b"".join(chunks.values()))
                 self._frame_ids[ptype] = frame_id
                 chunks.clear()
@@ -81,6 +94,16 @@ class GeomReceiver:
                 chunks.clear()
 
     def _publish(self, ptype: int, blob: bytes):
+        if ptype == TYPE_STATIC:
+            count = len(blob) // POINT_SIZE
+            raw = np.frombuffer(blob[: count * POINT_SIZE], dtype=np.uint8).reshape(count, POINT_SIZE)
+            pts = np.empty((count, 3), dtype=np.float32)
+            pts[:, 0:2] = raw[:, 0:8].copy().view(np.float32).reshape(count, 2)
+            pts[:, 2] = raw[:, 8:12].copy().view(np.uint32).reshape(count).view(np.float32)
+            with self.lock:
+                self.static_points = pts
+                self.static_version += 1
+            return
         if ptype == TYPE_POINTS:
             count = len(blob) // POINT_SIZE
             if count == 0:
@@ -107,6 +130,14 @@ class GeomReceiver:
         with self.lock:
             return self.points, self.line_segs, self.frames
 
+    def announced_world(self):
+        with self.lock:
+            return self.world
+
+    def latest_static(self):
+        with self.lock:
+            return self.static_points, self.static_version
+
 
 GEOM_VERT = """
 #version 330
@@ -127,9 +158,11 @@ void main() {
     uint flags = (packed >> 24) & 255u;
     bool fluid = (flags & 128u) != 0u;
     bool attack = (flags & 64u) != 0u;
-    v_kind = attack ? 2.0 : (fluid ? 1.0 : 0.0);
+    bool stat = (flags & 32u) != 0u;
+    v_kind = stat ? 3.0 : (attack ? 2.0 : (fluid ? 1.0 : 0.0));
     v_color = vec3(r, g, b);
     float size = fluid ? 3.0 : (u_ink > 0.5 ? 4.0 : 5.0);
+    if (stat) size = 2.6;
     if (attack) size = 14.0;
     gl_PointSize = size * u_point_scale;
 }
@@ -150,7 +183,10 @@ void main() {
         // emit ABSORPTION per channel (Beer-Lambert accumulator)
         vec3 inkColor;
         float amount;
-        if (v_kind > 1.5) {          // attack: vermilion blot
+        if (v_kind > 2.5) {          // static structure: dry pale ink, always present
+            inkColor = vec3(0.42, 0.42, 0.47);
+            amount = 0.16;
+        } else if (v_kind > 1.5) {          // attack: vermilion blot
             inkColor = vec3(0.78, 0.10, 0.04);
             amount = 0.45;
         } else if (v_kind > 0.5) {   // fluid: faint wash
@@ -163,7 +199,7 @@ void main() {
         vec3 absorption = (vec3(1.0) - inkColor) * amount * fall;
         f_color = vec4(absorption, 1.0);
     } else {
-        float gain = (v_kind > 1.5) ? 2.0 : ((v_kind > 0.5) ? 0.35 : 1.0);
+        float gain = (v_kind > 2.5) ? 0.22 : ((v_kind > 1.5) ? 2.0 : ((v_kind > 0.5) ? 0.35 : 1.0));
         f_color = vec4(v_color * fall * gain, 1.0);
     }
 }
@@ -318,8 +354,30 @@ def main():
 
     receiver = GeomReceiver(args.server, args.port)
 
+    # the server announces its world size every frame; wait briefly so the
+    # window is created with the right aspect from the start
+    deadline = time.time() + 3.0
+    while receiver.announced_world() is None and time.time() < deadline:
+        time.sleep(0.05)
+    announced = receiver.announced_world()
+    if announced is not None:
+        world_w, world_h = announced
+        win_h = max(200, int(win_w * world_h / world_w))
+        print(f"world from server: {world_w:.0f}x{world_h:.0f}", flush=True)
+
     if not glfw.init():
         raise SystemExit("glfw init failed")
+    # fit the window into the monitor workarea, preserving world aspect
+    try:
+        _, _, wa_w, wa_h = glfw.get_monitor_workarea(glfw.get_primary_monitor())
+    except Exception:
+        wa_w, wa_h = 1512, 950
+    if win_h > wa_h - 80:
+        win_h = wa_h - 80
+        win_w = max(300, int(win_h * world_w / world_h))
+    if win_w > wa_w - 40:
+        win_w = wa_w - 40
+        win_h = max(200, int(win_w * world_h / world_w))
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -357,6 +415,8 @@ def main():
 
     point_buf = ctx.buffer(reserve=POINT_SIZE * 100000, dynamic=True)
     points_vao = ctx.vertex_array(points_prog, [(point_buf, "2f 1f", "in_pos", "in_packed")])
+    static_buf = ctx.buffer(reserve=POINT_SIZE * 200000, dynamic=True)
+    static_vao = ctx.vertex_array(points_prog, [(static_buf, "2f 1f", "in_pos", "in_packed")])
     corner_buf = ctx.buffer(np.array([0, -1, 0, 1, 1, -1, 1, 1], dtype=np.float32))
     line_inst_buf = ctx.buffer(reserve=20 * 20000, dynamic=True)
     strokes_vao = ctx.vertex_array(
@@ -372,8 +432,9 @@ def main():
 
     recorder = None
     rec_next_t = 0.0
-    if args.record:
-        recorder = subprocess.Popen(
+
+    def start_recorder():
+        proc = subprocess.Popen(
             [
                 "ffmpeg", "-y", "-loglevel", "error",
                 "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{fb_w}x{fb_h}", "-r", str(args.record_fps), "-i", "-",
@@ -382,20 +443,36 @@ def main():
             ],
             stdin=subprocess.PIPE,
         )
-        print(f"recording to {args.record} at {args.record_fps} fps", flush=True)
+        print(f"recording to {args.record} at {args.record_fps} fps ({fb_w}x{fb_h})", flush=True)
+        return proc
 
     cur = 0
     last_frames = -1
+    last_static_version = -1
     n_points = 0
+    n_static = 0
     n_lines = 0
     fps_t0, fps_n = time.time(), 0
     start_t = time.time()
     snapshot_done = False
 
+    screen = ctx.screen
+
     while not glfw.window_should_close(window):
         glfw.poll_events()
         if glfw.get_key(window, glfw.KEY_ESCAPE) == glfw.PRESS:
             break
+
+
+        static_pts, static_version = receiver.latest_static()
+        if static_version != last_static_version and len(static_pts):
+            last_static_version = static_version
+            data = static_pts.tobytes()
+            if len(data) > static_buf.size:
+                static_buf.orphan(len(data) * 2)
+            static_buf.write(data)
+            n_static = len(static_pts)
+            print(f"static structure: {n_static} points", flush=True)
 
         pts, line_segs, frames = receiver.latest()
         if frames != last_frames:
@@ -421,12 +498,14 @@ def main():
         decay_vao.render(moderngl.TRIANGLES)
         # additive accumulation (light in glow mode, absorption in ink mode)
         ctx.blend_func = moderngl.ONE, moderngl.ONE
+        if n_static:
+            static_vao.render(moderngl.POINTS, vertices=n_static)
         if n_lines:
             strokes_vao.render(moderngl.TRIANGLE_STRIP, vertices=4, instances=n_lines)
         if n_points:
             points_vao.render(moderngl.POINTS, vertices=n_points)
         # display
-        ctx.screen.use()
+        screen.use()
         accum[nxt].use(0)
         ctx.blend_func = moderngl.ONE, moderngl.ZERO
         display_vao.render(moderngl.TRIANGLES)
@@ -434,18 +513,20 @@ def main():
         elapsed = time.time() - start_t
         if args.snapshot and not snapshot_done and elapsed > args.snapshot_after:
             snapshot_done = True
-            sw, sh = ctx.screen.width, ctx.screen.height
-            raw = ctx.screen.read(components=3)
+            sw, sh = screen.width, screen.height
+            raw = screen.read(components=3)
             with open(args.snapshot, "wb") as f:
                 f.write(f"P6\n{sw} {sh}\n255\n".encode())
                 arr = np.frombuffer(raw, dtype=np.uint8).reshape(sh, sw, 3)[::-1]
                 f.write(arr.tobytes())
             print(f"snapshot written: {args.snapshot} ({sw}x{sh})", flush=True)
 
+        if args.record and recorder is None:
+            recorder = start_recorder()
         if recorder is not None and elapsed >= rec_next_t:
             rec_next_t = elapsed + 1.0 / args.record_fps
             try:
-                recorder.stdin.write(ctx.screen.read(components=3))
+                recorder.stdin.write(screen.read(components=3))
             except BrokenPipeError:
                 recorder = None
 

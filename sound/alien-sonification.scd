@@ -96,6 +96,11 @@ s.waitForBoot({
 	~attackBudget = 12;   // max ticks scheduled per OSC frame to protect the server
 
 	// ---------- OSC handlers ----------
+	OSCdef(\alienWorld, { |msg|
+		~worldW = msg[1].asFloat.max(1);
+		~worldH = msg[2].asFloat.max(1);
+	}, '/alien/world');
+
 	OSCdef(\alienStats, { |msg|
 		var numCells, energy, tps;
 		numCells = msg[1].asFloat;

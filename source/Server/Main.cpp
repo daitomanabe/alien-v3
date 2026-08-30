@@ -96,6 +96,7 @@ int main(int argc, char** argv)
 
         UdpChannel oscChannel(oscListen, oscHost, oscPort);
         GeomStreamer geomStreamer(geomListen, geomHost, geomPort, maxGeomCells, maxGeomFluid, maxGeomLines);
+        geomStreamer.setWorldSize(static_cast<float>(worldSize.x), static_cast<float>(worldSize.y));
 
         if (tpsCap > 0) {
             simulationFacade->setTpsRestriction(tpsCap);
@@ -128,11 +129,27 @@ int main(int argc, char** argv)
             }
             if (geomStreamer.channel().poll().subscribersChanged) {
                 std::cout << "Geometry subscribers: " << geomStreamer.channel().targetString() << std::endl;
+                geomStreamer.markStaticDirty();
             }
             for (auto const& command : oscPollResult.commands) {
                 if (command == "/alien/cataclysm") {
                     std::cout << "Command: cataclysm" << std::endl;
                     simulationFacade->applyCataclysm(1);
+                } else if (command == "/alien/save") {
+                    auto saveTimestep = simulationFacade->getCurrentTimestep();
+                    auto savePath = "saved-" + std::to_string(saveTimestep) + ".sim";
+                    SimulationDesc saveData;
+                    saveData.timestep(saveTimestep)
+                        .worldSize(simulationFacade->getWorldSize())
+                        .mainData(simulationFacade->getSimulationData())
+                        .simulationParameters(simulationFacade->getSimulationParameters())
+                        .statistics(simulationFacade->getStatisticsHistory().getCopiedData())
+                        .realTime(simulationFacade->getRealTime());
+                    if (SerializerService::get().serializeSimulationToFiles(savePath, saveData)) {
+                        std::cout << "Command: saved to " << savePath << std::endl;
+                    } else {
+                        std::cout << "Command: save FAILED" << std::endl;
+                    }
                 } else {
                     std::cout << "Unknown command: " << command << std::endl;
                 }
@@ -142,6 +159,10 @@ int main(int argc, char** argv)
             auto haveRenderData = simulationFacade->tryExtractRenderDataToHost(renderData, worldRect);
 
             OscBundle bundle;
+
+            OscMessage worldMsg("/alien/world");
+            worldMsg.addInt(worldSize.x).addInt(worldSize.y);
+            bundle.add(worldMsg);
 
             auto const& objects = statistics.objectStatistics;
             OscMessage stats("/alien/stats");
