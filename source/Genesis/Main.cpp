@@ -362,6 +362,67 @@ namespace
                 object.type(FluidDesc());
                 content._objects.push_back(object);
             }
+        } else if (garden.layout == "islands") {
+            // --- archipelago: ring walls with an opening facing the inner sea ---
+            constexpr int NumIslands = 8;
+            auto cx = garden.worldW * 0.5f;
+            auto cy = garden.worldH * 0.5f;
+            auto ringR = std::min(garden.worldW, garden.worldH) * 0.33f;
+            auto islandR = std::min(garden.worldW, garden.worldH) * 0.115f;
+
+            std::vector<RealVector2D> islandCenters;
+            for (int island = 0; island < NumIslands; ++island) {
+                auto a = 6.2831853f * island / NumIslands;
+                auto ix = cx + ringR * std::cos(a);
+                auto iy = cy + ringR * std::sin(a);
+                islandCenters.push_back({ix, iy});
+
+                auto gapCenter = a + 3.1415926f;  // opening faces the inner sea
+                for (float t = 0.0f; t < 6.2831853f; t += 1.0f / islandR) {
+                    auto d = std::fmod(t - gapCenter + 9.42477f, 6.2831853f) - 3.1415926f;
+                    if (std::abs(d) < 0.55f) {
+                        continue;
+                    }
+                    addSolidPoint(content, ix + islandR * std::cos(t), iy + islandR * std::sin(t), garden.shelfColor);
+                }
+                // a few inward tendrils per island
+                for (int tendril = 0; tendril < 3; ++tendril) {
+                    auto wallAngle = gapCenter + 3.1415926f + (unit(rng) - 0.5f) * 3.6f;
+                    auto wx = ix + islandR * std::cos(wallAngle);
+                    auto wy = iy + islandR * std::sin(wallAngle);
+                    auto length = garden.tendrilLength * (0.4f + 0.6f * unit(rng));
+                    auto dirX = (ix - wx) / islandR;
+                    auto dirY = (iy - wy) / islandR;
+                    for (float d = 2.0f; d <= length; d += 1.0f) {
+                        auto sway = 4.0f * std::sin(d * 0.18f + tendril * 2.1f);
+                        addSolidPoint(content, wx + dirX * d - dirY * sway, wy + dirY * d + dirX * sway, garden.shelfColor);
+                    }
+                }
+            }
+
+            for (int i = 0; i < garden.numSeeds; ++i) {
+                auto const& center = islandCenters[i % NumIslands];
+                auto jitterAngle = unit(rng) * 6.2831853f;
+                auto jitterR = islandR * 0.35f * unit(rng);
+                seedPositions.push_back({center.x + jitterR * std::cos(jitterAngle), center.y + jitterR * std::sin(jitterAngle)});
+            }
+
+            // fluid: lagoons inside the islands plus a thin open sea
+            for (int i = 0; i < garden.fluidParticles; ++i) {
+                auto object = ObjectDesc();
+                if (unit(rng) < 0.65f) {
+                    auto const& center = islandCenters[static_cast<int>(unit(rng) * NumIslands) % NumIslands];
+                    auto a = unit(rng) * 6.2831853f;
+                    auto r = islandR * 0.85f * std::sqrt(unit(rng));
+                    object.pos({center.x + r * std::cos(a), center.y + r * std::sin(a)});
+                } else {
+                    object.pos({unit(rng) * garden.worldW, unit(rng) * garden.worldH});
+                }
+                object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
+                object.color(garden.shelfColor);
+                object.type(FluidDesc());
+                content._objects.push_back(object);
+            }
         } else {
             // --- static shelves: sine waves spanning the world, with hanging tendrils ---
             auto marginY = garden.worldH * 0.18f;
@@ -556,7 +617,7 @@ int main(int argc, char** argv)
         create->add_option("--params", paramsFile, "SimulationParameters JSON (from dump)");
         create->add_option("--seed", seedFiles, "Seed .content file(s) from dump (repeatable)");
         create->add_option("--world", worldText, "World size WxH");
-        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral");
+        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral | islands");
         create->add_option("--turns", garden.spiralTurns, "Spiral turns (layout=spiral)");
         create->add_option("--shelves", garden.shelves, "Number of shelves");
         create->add_option("--amplitude", garden.amplitude, "Shelf wave amplitude");

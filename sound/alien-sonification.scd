@@ -90,7 +90,8 @@ s.waitForBoot({
 	~panMode = nil;
 	~eventSpace = { |x, y|
 		var mode, pan, dist, cx, cy;
-		mode = ~panMode ? (if((~worldW / ~worldH) < 1.8, \polar, \cartesian));
+		// polar only for near-square worlds; wide AND tall worlds pan on x
+		mode = ~panMode ? (if(max(~worldW / ~worldH, ~worldH / ~worldW) < 1.8, \polar, \cartesian));
 		if(mode == \polar, {
 			cx = ~worldW * 0.5; cy = ~worldH * 0.5;
 			pan = (atan2(y - cy, x - cx) / pi).clip(-1, 1);

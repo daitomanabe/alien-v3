@@ -133,11 +133,72 @@ def design_vortex(p: Params, world_w, world_h):
     apply_layer(p, 10, "Core bonus", (cx, cy), ("circ", r_out * 0.22), r_out * 0.1, "off")
 
 
+def design_rain(p: Params, world_w, world_h):
+    """A tall world under steady gravity. Life is seeded on sparse shelves
+    near the top; offspring, energy and debris rain down through wind bands
+    to sediment beds at the bottom. Vertical position is register: things
+    literally fall in pitch."""
+    cx = world_w / 2
+
+    # L0 gravity everywhere (3x upstream's hanging gravity: a real, visible fall)
+    apply_layer(p, 0, "Gravity", (cx, world_h / 2), ("rect", world_w, world_h), 0, ("linear", 5e-5, 180.0))
+    # L1 cloud deck: churn where life is born
+    apply_layer(p, 1, "Cloud", (cx, world_h * 0.12), ("rect", world_w, world_h * 0.2), world_h * 0.05, ("perlin", 0.012, 90, 5000))
+    # L2/L3 crosswind bands at falling heights (opposite directions -> zigzag descent)
+    apply_layer(p, 2, "Wind east", (cx, world_h * 0.4), ("rect", world_w, world_h * 0.14), world_h * 0.06, ("linear", 0.0015, 90.0))
+    apply_layer(p, 3, "Wind west", (cx, world_h * 0.62), ("rect", world_w, world_h * 0.14), world_h * 0.06, ("linear", 0.0015, 270.0))
+    # L4 ground gust just above the floor (stirs the sediment)
+    apply_layer(p, 4, "Ground gust", (cx, world_h * 0.9), ("rect", world_w, world_h * 0.1), world_h * 0.04, ("perlin", 0.006, 60, 4000))
+    # L5..L7 unused wind slots parked, fields off
+    apply_layer(p, 5, "Parked A", (world_w * 0.05, world_h * 0.02), ("circ", 60), 30, "off")
+    apply_layer(p, 6, "Parked B", (world_w * 0.95, world_h * 0.02), ("circ", 60), 30, "off")
+    apply_layer(p, 7, "Parked C", (world_w * 0.05, world_h * 0.98), ("circ", 60), 30, "off")
+    # L8/L9 inherited soil ecology on the sediment beds
+    apply_layer(p, 8, "Sediment W", (world_w * 0.28, world_h * 0.92), ("circ", world_w * 0.22), world_w * 0.1, "off")
+    apply_layer(p, 9, "Sediment E", (world_w * 0.72, world_h * 0.92), ("circ", world_w * 0.22), world_w * 0.1, "off")
+    # L10 inherited bonus on the cloud deck (birth zone)
+    apply_layer(p, 10, "Cloud bonus", (cx, world_h * 0.12), ("rect", world_w, world_h * 0.16), world_h * 0.04, "off")
+
+
+def design_islands(p: Params, world_w, world_h, num_islands=8):
+    """An archipelago: each island gets its own zone with its own weather.
+    Lineages evolve apart; in the sonification each island keeps a fixed
+    bearing (polar pan), so the archipelago becomes a fixed stereo stage."""
+    cx, cy = world_w / 2, world_h / 2
+    ring_r = min(world_w, world_h) * 0.33
+    island_r = min(world_w, world_h) * 0.115
+
+    weathers = [
+        ("perlin", 0.010, 60, 4000),
+        ("radial", 0.03, CW, 0.0),
+        ("linear", 0.002, 45.0),
+        "off",
+        ("perlin", 0.018, 35, 2500),
+        ("radial", 0.03, CCW, 0.0),
+        ("linear", 0.002, 225.0),
+        "off",
+    ]
+    for i in range(num_islands):
+        angle = 2 * math.pi * i / num_islands
+        x = cx + ring_r * math.cos(angle)
+        y = cy + ring_r * math.sin(angle)
+        apply_layer(p, i, f"Island {i}", (x, y), ("circ", island_r), island_r * 0.5, weathers[i % len(weathers)])
+    # L8/L9 inherited soil ecology: two islands double as fertile ground
+    x8 = cx + ring_r * math.cos(0.0)
+    y8 = cy + ring_r * math.sin(0.0)
+    x9 = cx + ring_r * math.cos(math.pi)
+    y9 = cy + ring_r * math.sin(math.pi)
+    apply_layer(p, 8, "Fertile E", (x8, y8), ("circ", island_r), island_r * 0.5, "off")
+    apply_layer(p, 9, "Fertile W", (x9, y9), ("circ", island_r), island_r * 0.5, "off")
+    # L10 inherited bonus on the open sea center
+    apply_layer(p, 10, "Open sea", (cx, cy), ("circ", ring_r * 0.5), ring_r * 0.25, "off")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--design", default="vortex", choices=["vortex"])
+    ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands"])
     ap.add_argument("--world", default="3000x3000")
     ap.add_argument(
         "--energy-pool",
@@ -149,7 +210,12 @@ def main():
     w, h = (float(v) for v in args.world.split("x"))
 
     p = Params(args.base)
-    design_vortex(p, w, h)
+    if args.design == "rain":
+        design_rain(p, w, h)
+    elif args.design == "islands":
+        design_islands(p, w, h)
+    else:
+        design_vortex(p, w, h)
     if args.energy_pool > 0:
         p.sp["External energy control"]["External energy amount"]["Base"]["Value"] = fmt(args.energy_pool)
         print(f"external energy pool: {args.energy_pool:.0f}")
