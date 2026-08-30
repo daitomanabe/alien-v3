@@ -90,24 +90,37 @@ GCC 11 ホスト対応のため `std::views::zip` は `aliencompat::zip`(source/
 - `SimulationCudaFacade::extractRenderDataToHost` / `SimulationFacade::tryExtractRenderDataToHost`
 - `source/Server/` — alien_server 本体(OSC エンコーダ・ジオメトリストリーマ込み、依存追加なし)
 
-## 庭を自作する(alien_genesis)
+## 庭を自作する(alien_genesis + garden_env)
 
 ```bash
 # 1. 既存シーンを解剖 → parameters.json + 種ライブラリ(creature-*.content / genome-*.genome)
 ./alien_genesis dump -i scenes/hanging-garden.sim -o garden-dump --top 4
 
-# 2. プロシージャル生成: サインカーブの棚 + 垂下する蔓 + 種まき + 流体の海 + エネルギー
+# 2. 環境を自分の空間設計に書き換え(生態系バランスは継承、11ゾーンの配置・力場を再設計)
+python3 tools/garden_env.py --base garden-dump/parameters.json \
+  --out scenes/vortex-params.json --design vortex --world 3000x3000
+
+# 3. プロシージャル生成(spiral: アルキメデス螺旋 + 内向きの蔓 + 中心寄りの霧)
 ./alien_genesis new -o scenes/my-garden.sim \
-  --params garden-dump/parameters.json \
+  --params scenes/vortex-params.json --layout spiral --world 3000x3000 --turns 2.6 \
   --seed garden-dump/creature-0.content --seed garden-dump/creature-1.content \
-  --world 5000x1500 --shelves 4 --amplitude 55 --wavelength 800 \
-  --tendrils 16 --seeds 12 --fluid 80000 --energy 3000 --rng 42
+  --seeds 12 --tendril-length 80 --fluid 70000 --energy 2500 --rng 7
 ```
 
+- レイアウト: `--layout shelves`(波打つ棚、Hanging Garden 型)/ `--layout spiral`(渦)
+- **形態の自作**: `--body-shape keep,hexagon,zigzag,tube --body-nodes 0,5,4,6` — 種ゲノムの
+  遺伝子形状(体制)とノード数を株ごとに巡回適用。v5 の種は「Base ノード + セル付帯の
+  constructor + 色別外部エネルギー流入」で育つため、形の差し替えだけで別形態の種族になる
+  (segment=茎 / hexagon=団子コロニー を実験で確認済み)
+- 環境デザイン vortex: 全域 Perlin の呼吸 + 中心の Radial 渦 + コア乱流 + 螺旋腕の風3つ。
+  food chain・エネルギー経済・変異率は dump 元から継承(生態系が成立しやすい)
 - 種は元シーンの単細胞生物(2遺伝子)。播種時に株ごとに lineageId(=音の声部)と色
   (=ピッチクラス/差し色)を振り分ける
-- パラメータ JSON の Layer/放射源座標は元の世界サイズ前提。世界サイズを変える場合は
-  JSON の座標も編集すること
+- 世界サイズはサーバが毎 tick `/alien/world`(OSC)+ ジオメトリ info パケットで通知し、
+  SC / viz は自動追従する(viz はウィンドウ生成前にサーバの world を待つ)
+- 壁など静的構造は type=3 チャンネルで**全点を1回だけ**配信(エポック方式、30秒ごと再送)。
+  受信側がキャッシュするので毎フレームのサンプリングは動く物に集中する
+- 育った庭の保存: `scripts/alien-ctl.sh save` → サーバ側 `saved-<timestep>.sim`
 - 抽出時に生物→棚のアンカー接続は切断される(参照先が無くなり
   `DescConverterService::setConnections` が落ちるため)
 

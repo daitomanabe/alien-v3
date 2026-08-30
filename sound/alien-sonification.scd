@@ -84,6 +84,24 @@ s.waitForBoot({
 	~worldW = 6000.0;
 	~worldH = 1500.0;
 
+	// spatial mapping of events: \cartesian (x -> pan; wide worlds) or
+	// \polar (angle around world center -> pan, radius -> distance; square/vortex worlds).
+	// Auto-selected from the announced world aspect, override by setting ~panMode.
+	~panMode = nil;
+	~eventSpace = { |x, y|
+		var mode, pan, dist, cx, cy;
+		mode = ~panMode ? (if((~worldW / ~worldH) < 1.8, \polar, \cartesian));
+		if(mode == \polar, {
+			cx = ~worldW * 0.5; cy = ~worldH * 0.5;
+			pan = (atan2(y - cy, x - cx) / pi).clip(-1, 1);
+			dist = (hypot(x - cx, y - cy) / (min(~worldW, ~worldH) * 0.5)).clip(0, 1.2);
+		}, {
+			pan = (x / ~worldW * 2 - 1).clip(-1, 1);
+			dist = 0.5;
+		});
+		[pan, dist];
+	};
+
 	// running max for adaptive normalization of activity rates
 	~muscleMax = 1.0;
 	~attackMax = 1.0;
@@ -166,28 +184,33 @@ s.waitForBoot({
 	}, '/alien/lineage');
 
 	OSCdef(\alienAttack, { |msg|
-		var x, y, pan, freq;
+		var x, y, space, pan, dist, freq, amp;
 		if(~attackBudget > 0, {
 			~attackBudget = ~attackBudget - 1;
 			x = msg[1].asFloat;
 			y = msg[2].asFloat;
-			pan = (x / ~worldW * 2 - 1).clip(-1, 1);
+			space = ~eventSpace.value(x, y);
+			pan = space[0];
+			dist = space[1];
 			freq = y.linexp(0, ~worldH, 2400, 300);
+			amp = 0.09 * dist.linlin(0, 1.2, 1.0, 0.35);   // events far from center sound farther
 			// spread the ticks of one frame over ~60 ms so dense predation
 			// reads as granular rain instead of one merged click
 			SystemClock.sched(rrand(0.0, 0.06), {
-				Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, 0.09], addAction: \addToHead);
+				Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, amp], addAction: \addToHead);
 				nil;
 			});
 		});
 	}, '/alien/attack');
 
 	OSCdef(\alienDetonation, { |msg|
-		var x, pan, radius;
+		var x, y, space, radius;
 		x = msg[1].asFloat;
+		y = msg[2].asFloat;
 		radius = msg[3].asFloat;
-		pan = (x / ~worldW * 2 - 1).clip(-1, 1);
-		Synth(\detonationBoom, [\out, ~eventBus, \pan, pan, \amp, 0.4, \dur, radius.linlin(0, 30, 0.4, 1.6)], addAction: \addToHead);
+		space = ~eventSpace.value(x, y);
+		Synth(\detonationBoom, [\out, ~eventBus, \pan, space[0], \amp, 0.4 * space[1].linlin(0, 1.2, 1.0, 0.5),
+			\dur, radius.linlin(0, 30, 0.4, 1.6)], addAction: \addToHead);
 	}, '/alien/detonation');
 
 	// subscribe + keepalive so the server learns/refreshes our return address

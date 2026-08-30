@@ -12,11 +12,13 @@
 //       scattered energy particles.
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <random>
 #include <unordered_set>
 
@@ -161,6 +163,29 @@ namespace
             summary << "  #" << exported << " genomeId " << genomeId << ": creatures " << population << ", genes " << genome->_genes.size() << ", nodes "
                     << numNodes << ", representative cells " << bestCellCount << "\n";
 
+            // decode the genome: per gene shape and node cell types with replication wiring
+            static char const* cellTypeNames[] =
+                {"Base", "Depot", "Sensor", "Generator", "Attacker", "Injector", "Muscle", "Defender", "Reconnector", "Detonator", "Digestor", "Memory", "Communicator", "Void"};
+            static char const* shapeNames[] = {"Segment", "Triangle", "Rectangle", "Hexagon", "Tube", "LargeLolli", "SmallLolli", "Zigzag"};
+            for (size_t geneIdx = 0; geneIdx < genome->_genes.size(); ++geneIdx) {
+                auto const& gene = genome->_genes[geneIdx];
+                auto shapeIdx = static_cast<size_t>(gene._shape);
+                summary << "      gene[" << geneIdx << "] shape=" << (shapeIdx < 8 ? shapeNames[shapeIdx] : "?") << " connDist=" << gene._connectionDistance
+                        << " stiffness=" << gene._stiffness << " nodes[";
+                for (auto const& node : gene._nodes) {
+                    auto cellType = static_cast<size_t>(node.getCellType());
+                    summary << " " << (cellType < 14 ? cellTypeNames[cellType] : "?") << "(c" << node._color;
+                    if (node._constructor.has_value()) {
+                        auto const& ctor = node._constructor.value();
+                        summary << ",ctor->gene" << ctor._geneIndex << ",branches=" << ctor._numBranches << ",concat="
+                                << (ctor._numConcatenations == std::numeric_limits<int>::max() ? -1 : ctor._numConcatenations)
+                                << (ctor._separation ? ",sep" : "");
+                    }
+                    summary << ")";
+                }
+                summary << " ]\n";
+            }
+
             SerializerService::get().serializeGenomeToFile(outDir / ("genome-" + std::to_string(exported) + ".genome"), *genome);
 
             if (bestCreatureIdx != SIZE_MAX && bestCellCount > 0) {
@@ -214,7 +239,42 @@ namespace
         int fluidParticles = 80000;
         unsigned rngSeed = 42;
         int shelfColor = 6;
+        std::string bodyShape;  // empty = keep the seed's genome; comma list cycles per plant: segment,hexagon,...
+        std::string bodyNodes;  // empty/0 = keep node count; comma list cycles per plant, e.g. 0,5,4
     };
+
+    std::vector<std::string> splitList(std::string const& text)
+    {
+        std::vector<std::string> result;
+        size_t start = 0;
+        while (start <= text.size()) {
+            auto end = text.find(',', start);
+            if (end == std::string::npos) {
+                end = text.size();
+            }
+            result.push_back(text.substr(start, end - start));
+            start = end + 1;
+        }
+        return result;
+    }
+
+    std::optional<ConstructorShape> shapeFromName(std::string const& name)
+    {
+        static std::map<std::string, ConstructorShape> const shapes = {
+            {"segment", ConstructorShape_Segment},
+            {"triangle", ConstructorShape_Triangle},
+            {"rectangle", ConstructorShape_Rectangle},
+            {"hexagon", ConstructorShape_Hexagon},
+            {"tube", ConstructorShape_Tube},
+            {"largelolli", ConstructorShape_LargeLolli},
+            {"smalllolli", ConstructorShape_SmallLolli},
+            {"zigzag", ConstructorShape_Zigzag},
+        };
+        auto lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+        auto findResult = shapes.find(lower);
+        return findResult != shapes.end() ? std::optional(findResult->second) : std::nullopt;
+    }
 
     void addSolidPoint(ContentDesc& content, float x, float y, int color)
     {
@@ -358,6 +418,31 @@ namespace
                 for (auto& creature : seed._creatures) {
                     creature.lineageId(i + 1);
                 }
+
+                // custom morphology: rewrite the body plan of the inherited genome
+                // (comma lists cycle per plant, so several morphotypes share one garden)
+                if (!garden.bodyShape.empty()) {
+                    auto shapeNames = splitList(garden.bodyShape);
+                    auto nodeCounts = garden.bodyNodes.empty() ? std::vector<std::string>{"0"} : splitList(garden.bodyNodes);
+                    auto const& shapeName = shapeNames[i % shapeNames.size()];
+                    auto numNodes = std::stoi(nodeCounts[i % nodeCounts.size()]);
+                    if (!shapeName.empty() && shapeName != "keep") {
+                        auto shape = shapeFromName(shapeName);
+                        if (!shape.has_value()) {
+                            std::cerr << "Unknown --body-shape entry: " << shapeName << std::endl;
+                            return 1;
+                        }
+                        for (auto& genome : seed._genomes) {
+                            for (auto& gene : genome._genes) {
+                                gene.shape(*shape);
+                                if (numNodes > 0 && !gene._nodes.empty()) {
+                                    auto prototype = gene._nodes.front();
+                                    gene._nodes.assign(numNodes, prototype);
+                                }
+                            }
+                        }
+                    }
+                }
                 for (auto& object : seed._objects) {
                     object._pos += seedPositions[i];
                 }
@@ -462,6 +547,9 @@ int main(int argc, char** argv)
         create->add_option("--fluid", garden.fluidParticles, "Number of fluid particles (the sea)");
         create->add_option("--rng", garden.rngSeed, "Random seed");
         create->add_option("--shelf-color", garden.shelfColor, "Color index of shelf cells (0-6)");
+        create->add_option(
+            "--body-shape", garden.bodyShape, "Rewrite seed genome gene shapes; comma list cycles per plant (keep|segment|triangle|rectangle|hexagon|tube|largelolli|smalllolli|zigzag)");
+        create->add_option("--body-nodes", garden.bodyNodes, "Resize each gene to N nodes; comma list cycles per plant (0 = keep)");
 
         CLI11_PARSE(app, argc, argv);
 
