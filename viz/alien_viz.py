@@ -13,6 +13,7 @@ Usage:
 import argparse
 import socket
 import struct
+import subprocess
 import threading
 import time
 
@@ -39,7 +40,7 @@ class GeomReceiver:
         self.sock.settimeout(0.5)
         self.lock = threading.Lock()
         self.points = np.zeros((0, 3), dtype=np.float32)   # x, y, packed rgba(u32-as-f32)
-        self.line_verts = np.zeros((0, 3), dtype=np.float32)
+        self.line_segs = np.zeros((0, 5), dtype=np.float32)  # x1, y1, x2, y2, packed
         self.frames = 0
         self._chunks = {TYPE_POINTS: {}, TYPE_LINES: {}}
         self._frame_ids = {TYPE_POINTS: -1, TYPE_LINES: -1}
@@ -96,19 +97,15 @@ class GeomReceiver:
             if count == 0:
                 return
             raw = np.frombuffer(blob[: count * LINE_SIZE], dtype=np.uint8).reshape(count, LINE_SIZE)
-            xy = raw[:, 0:16].copy().view(np.float32).reshape(count, 4)
-            packed = raw[:, 16:20].copy().view(np.uint32).reshape(count).view(np.float32)
-            verts = np.empty((count * 2, 3), dtype=np.float32)
-            verts[0::2, 0:2] = xy[:, 0:2]
-            verts[1::2, 0:2] = xy[:, 2:4]
-            verts[0::2, 2] = packed
-            verts[1::2, 2] = packed
+            segs = np.empty((count, 5), dtype=np.float32)
+            segs[:, 0:4] = raw[:, 0:16].copy().view(np.float32).reshape(count, 4)
+            segs[:, 4] = raw[:, 16:20].copy().view(np.uint32).reshape(count).view(np.float32)
             with self.lock:
-                self.line_verts = verts
+                self.line_segs = segs
 
     def latest(self):
         with self.lock:
-            return self.points, self.line_verts, self.frames
+            return self.points, self.line_segs, self.frames
 
 
 GEOM_VERT = """
@@ -172,19 +169,69 @@ void main() {
 }
 """
 
-LINES_FRAG = """
+STROKE_VERT = """
+#version 330
+uniform vec2 u_world;
+uniform vec2 u_viewport;
+uniform float u_stroke_scale;
+in vec2 in_corner;     // u in {0,1} along, v in {-1,1} across
+in vec4 in_seg;        // x1,y1,x2,y2 in world units
+in float in_packed;
+out vec3 v_color;
+out vec2 v_uv;         // pixel coords: x along (can exceed [0,len] in caps), y across
+out float v_len;
+out float v_halfw;
+void main() {
+    vec2 p1 = vec2(in_seg.x, in_seg.y) / u_world;
+    vec2 p2 = vec2(in_seg.z, in_seg.w) / u_world;
+    vec2 s1 = vec2(p1.x, 1.0 - p1.y) * u_viewport;
+    vec2 s2 = vec2(p2.x, 1.0 - p2.y) * u_viewport;
+    vec2 d = s2 - s1;
+    float len = max(length(d), 1e-4);
+    vec2 dir = d / len;
+    vec2 nrm = vec2(-dir.y, dir.x);
+
+    // brush width from world-space connection length: short bond = firm, thick stroke
+    float lenWorld = distance(in_seg.xy, in_seg.zw);
+    float halfw = clamp(4.5 - lenWorld * 1.4, 0.7, 4.0) * u_stroke_scale;
+
+    float along = in_corner.x * (len + 2.0 * halfw) - halfw;   // extend for round caps
+    vec2 sp = s1 + dir * along + nrm * (in_corner.y * halfw);
+    vec2 ndc = sp / u_viewport * 2.0 - 1.0;
+    gl_Position = vec4(ndc, 0.0, 1.0);
+
+    v_uv = vec2(along, in_corner.y * halfw);
+    v_len = len;
+    v_halfw = halfw;
+
+    uint packed = floatBitsToUint(in_packed);
+    v_color = vec3(float(packed & 255u), float((packed >> 8) & 255u), float((packed >> 16) & 255u)) / 255.0;
+}
+"""
+
+STROKE_FRAG = """
 #version 330
 uniform float u_ink;
+uniform float u_stroke_scale;
 in vec3 v_color;
-in float v_kind;
+in vec2 v_uv;
+in float v_len;
+in float v_halfw;
 out vec4 f_color;
 void main() {
+    // capsule distance: soft brush edge, round caps
+    float along = clamp(v_uv.x, 0.0, v_len);
+    float dist = length(vec2(v_uv.x - along, v_uv.y));
+    float edge = 1.0 - smoothstep(v_halfw * 0.45, v_halfw, dist);
+    if (edge <= 0.0) discard;
+
+    float weight = v_halfw / (4.0 * u_stroke_scale);   // 0..1: thicker stroke = wetter ink
     if (u_ink > 0.5) {
         vec3 inkColor = mix(vec3(0.05, 0.05, 0.08), v_color * 0.5, 0.25);
-        vec3 absorption = (vec3(1.0) - inkColor) * 0.85;
-        f_color = vec4(absorption, 1.0);
+        float amount = (0.10 + 0.55 * weight * weight) * edge;
+        f_color = vec4((vec3(1.0) - inkColor) * amount, 1.0);
     } else {
-        f_color = vec4(v_color * 0.5, 1.0);
+        f_color = vec4(v_color * 0.6 * edge * (0.3 + 0.7 * weight), 1.0);
     }
 }
 """
@@ -258,6 +305,8 @@ def main():
     parser.add_argument("--snapshot", default="", help="write a PPM of the screen to this path after --snapshot-after seconds")
     parser.add_argument("--snapshot-after", type=float, default=15.0)
     parser.add_argument("--exit-after", type=float, default=0.0, help="quit after N seconds (0 = run until closed)")
+    parser.add_argument("--record", default="", help="record the screen to this .mp4 (via ffmpeg)")
+    parser.add_argument("--record-fps", type=int, default=30)
     args = parser.parse_args()
     world_w, world_h = (float(v) for v in args.world.split("x"))
     win_w = args.width
@@ -282,17 +331,21 @@ def main():
     ctx = moderngl.create_context()
     ctx.enable(moderngl.PROGRAM_POINT_SIZE)
 
-    fb_w, fb_h = glfw.get_framebuffer_size(window)
-    point_scale = fb_w / win_w  # retina
+    # use the GL-reported size: glfw's framebuffer size can disagree by a few px
+    fb_w, fb_h = ctx.screen.width, ctx.screen.height
+    point_scale = fb_w / glfw.get_window_size(window)[0]  # retina
 
     points_prog = ctx.program(vertex_shader=GEOM_VERT, fragment_shader=POINTS_FRAG)
-    lines_prog = ctx.program(vertex_shader=GEOM_VERT, fragment_shader=LINES_FRAG)
+    stroke_prog = ctx.program(vertex_shader=STROKE_VERT, fragment_shader=STROKE_FRAG)
     decay_prog = ctx.program(vertex_shader=QUAD_VERT, fragment_shader=DECAY_FRAG)
     display_prog = ctx.program(vertex_shader=QUAD_VERT, fragment_shader=DISPLAY_FRAG)
-    for prog in (points_prog, lines_prog):
-        prog["u_world"].value = (world_w, world_h)
-        prog["u_ink"].value = 1.0 if ink else 0.0
-        prog["u_point_scale"].value = point_scale
+    points_prog["u_world"].value = (world_w, world_h)
+    points_prog["u_ink"].value = 1.0 if ink else 0.0
+    points_prog["u_point_scale"].value = point_scale
+    stroke_prog["u_world"].value = (world_w, world_h)
+    stroke_prog["u_viewport"].value = (fb_w, fb_h)
+    stroke_prog["u_ink"].value = 1.0 if ink else 0.0
+    stroke_prog["u_stroke_scale"].value = point_scale
     display_prog["u_ink"].value = 1.0 if ink else 0.0
     display_prog["u_strength"].value = ink_strength
     decay_prog["u_decay"].value = decay
@@ -304,8 +357,12 @@ def main():
 
     point_buf = ctx.buffer(reserve=POINT_SIZE * 100000, dynamic=True)
     points_vao = ctx.vertex_array(points_prog, [(point_buf, "2f 1f", "in_pos", "in_packed")])
-    line_buf = ctx.buffer(reserve=12 * 100000, dynamic=True)
-    lines_vao = ctx.vertex_array(lines_prog, [(line_buf, "2f 1f", "in_pos", "in_packed")])
+    corner_buf = ctx.buffer(np.array([0, -1, 0, 1, 1, -1, 1, 1], dtype=np.float32))
+    line_inst_buf = ctx.buffer(reserve=20 * 20000, dynamic=True)
+    strokes_vao = ctx.vertex_array(
+        stroke_prog,
+        [(corner_buf, "2f", "in_corner"), (line_inst_buf, "4f 1f /i", "in_seg", "in_packed")],
+    )
 
     accum = [ctx.texture((fb_w, fb_h), 4, dtype="f2") for _ in range(2)]
     fbos = [ctx.framebuffer(color_attachments=[t]) for t in accum]
@@ -313,10 +370,24 @@ def main():
         f.use()
         ctx.clear(0, 0, 0, 1)
 
+    recorder = None
+    rec_next_t = 0.0
+    if args.record:
+        recorder = subprocess.Popen(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{fb_w}x{fb_h}", "-r", str(args.record_fps), "-i", "-",
+                "-vf", "vflip", "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+                args.record,
+            ],
+            stdin=subprocess.PIPE,
+        )
+        print(f"recording to {args.record} at {args.record_fps} fps", flush=True)
+
     cur = 0
     last_frames = -1
     n_points = 0
-    n_line_verts = 0
+    n_lines = 0
     fps_t0, fps_n = time.time(), 0
     start_t = time.time()
     snapshot_done = False
@@ -326,7 +397,7 @@ def main():
         if glfw.get_key(window, glfw.KEY_ESCAPE) == glfw.PRESS:
             break
 
-        pts, line_verts, frames = receiver.latest()
+        pts, line_segs, frames = receiver.latest()
         if frames != last_frames:
             last_frames = frames
             if len(pts):
@@ -335,12 +406,12 @@ def main():
                     point_buf.orphan(len(data) * 2)
                 point_buf.write(data)
                 n_points = len(pts)
-            if len(line_verts):
-                data = line_verts.tobytes()
-                if len(data) > line_buf.size:
-                    line_buf.orphan(len(data) * 2)
-                line_buf.write(data)
-                n_line_verts = len(line_verts)
+            if len(line_segs):
+                data = line_segs.tobytes()
+                if len(data) > line_inst_buf.size:
+                    line_inst_buf.orphan(len(data) * 2)
+                line_inst_buf.write(data)
+                n_lines = len(line_segs)
 
         nxt = 1 - cur
         fbos[nxt].use()
@@ -350,8 +421,8 @@ def main():
         decay_vao.render(moderngl.TRIANGLES)
         # additive accumulation (light in glow mode, absorption in ink mode)
         ctx.blend_func = moderngl.ONE, moderngl.ONE
-        if n_line_verts:
-            lines_vao.render(moderngl.LINES, vertices=n_line_verts)
+        if n_lines:
+            strokes_vao.render(moderngl.TRIANGLE_STRIP, vertices=4, instances=n_lines)
         if n_points:
             points_vao.render(moderngl.POINTS, vertices=n_points)
         # display
@@ -371,17 +442,28 @@ def main():
                 f.write(arr.tobytes())
             print(f"snapshot written: {args.snapshot} ({sw}x{sh})", flush=True)
 
+        if recorder is not None and elapsed >= rec_next_t:
+            rec_next_t = elapsed + 1.0 / args.record_fps
+            try:
+                recorder.stdin.write(ctx.screen.read(components=3))
+            except BrokenPipeError:
+                recorder = None
+
         glfw.swap_buffers(window)
         cur = nxt
 
         fps_n += 1
         if time.time() - fps_t0 > 5:
-            print(f"fps {fps_n / (time.time() - fps_t0):.1f}, points {n_points}, lineVerts {n_line_verts}, frames rx {frames}", flush=True)
+            print(f"fps {fps_n / (time.time() - fps_t0):.1f}, points {n_points}, lines {n_lines}, frames rx {frames}", flush=True)
             fps_t0, fps_n = time.time(), 0
 
         if args.exit_after > 0 and elapsed > args.exit_after:
             break
 
+    if recorder is not None:
+        recorder.stdin.close()
+        recorder.wait()
+        print("recording finished", flush=True)
     glfw.terminate()
 
 

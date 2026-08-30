@@ -168,7 +168,12 @@ s.waitForBoot({
 			y = msg[2].asFloat;
 			pan = (x / ~worldW * 2 - 1).clip(-1, 1);
 			freq = y.linexp(0, ~worldH, 2400, 300);
-			Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, 0.12], addAction: \addToHead);
+			// spread the ticks of one frame over ~60 ms so dense predation
+			// reads as granular rain instead of one merged click
+			SystemClock.sched(rrand(0.0, 0.06), {
+				Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, 0.09], addAction: \addToHead);
+				nil;
+			});
 		});
 	}, '/alien/attack');
 
