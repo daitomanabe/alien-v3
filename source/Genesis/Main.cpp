@@ -242,6 +242,7 @@ namespace
         std::string bodyShape;  // empty = keep the seed's genome; comma list cycles per plant: segment,hexagon,...
         std::string bodyNodes;  // empty/0 = keep node count; comma list cycles per plant, e.g. 0,5,4
         std::string recolor = "1";  // comma list cycles per plant: 1 = recolor to i%7 (pitch class variety), 0 = keep species color (color IS ecology: energy inflow and food chain are per-color)
+        std::string arm = "0";      // comma list cycles per plant: 1 = insert an Attacker node (AttackCreature mode) as the second node of gene[0]
     };
 
     std::vector<std::string> splitList(std::string const& text)
@@ -423,6 +424,23 @@ namespace
                     creature.lineageId(i + 1);
                 }
 
+                // weapons: insert an Attacker node after the head node (the head cell
+                // is already built, so only unbuilt genome positions are touched)
+                {
+                    auto armList = splitList(garden.arm);
+                    if (armList[i % armList.size()] == "1") {
+                        for (auto& genome : seed._genomes) {
+                            if (!genome._genes.empty() && !genome._genes[0]._nodes.empty()) {
+                                auto& nodes = genome._genes[0]._nodes;
+                                auto attackNode = nodes.front();
+                                attackNode.cellType(AttackerGenomeDesc());
+                                attackNode.constructor(std::nullopt);
+                                nodes.insert(nodes.begin() + 1, attackNode);
+                            }
+                        }
+                    }
+                }
+
                 // custom morphology: rewrite the body plan of the inherited genome
                 // (comma lists cycle per plant, so several morphotypes share one garden)
                 if (!garden.bodyShape.empty()) {
@@ -555,6 +573,7 @@ int main(int argc, char** argv)
             "--body-shape", garden.bodyShape, "Rewrite seed genome gene shapes; comma list cycles per plant (keep|segment|triangle|rectangle|hexagon|tube|largelolli|smalllolli|zigzag)");
         create->add_option("--body-nodes", garden.bodyNodes, "Resize each gene to N nodes; comma list cycles per plant (0 = keep)");
         create->add_option("--recolor", garden.recolor, "Comma list cycling per plant: 1 = recolor to i%7, 0 = keep species color (color drives energy inflow and food chain)");
+        create->add_option("--arm", garden.arm, "Comma list cycling per plant: 1 = insert an Attacker node (hunts creatures) into gene[0]");
 
         CLI11_PARSE(app, argc, argv);
 

@@ -139,11 +139,20 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--design", default="vortex", choices=["vortex"])
     ap.add_argument("--world", default="3000x3000")
+    ap.add_argument(
+        "--energy-pool",
+        type=float,
+        default=0,
+        help="external energy pool (0 = keep template). Upstream uses 12e6; a small pool starves the garden over time — famine ignites predation (seasons)",
+    )
     args = ap.parse_args()
     w, h = (float(v) for v in args.world.split("x"))
 
     p = Params(args.base)
     design_vortex(p, w, h)
+    if args.energy_pool > 0:
+        p.sp["External energy control"]["External energy amount"]["Base"]["Value"] = fmt(args.energy_pool)
+        print(f"external energy pool: {args.energy_pool:.0f}")
     p.save(args.out)
 
     names = [p.sp["General"]["Layer name"][f"Layer {i}"]["Value"] for i in range(11)]
