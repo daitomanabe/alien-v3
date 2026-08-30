@@ -241,6 +241,7 @@ namespace
         int shelfColor = 6;
         std::string bodyShape;  // empty = keep the seed's genome; comma list cycles per plant: segment,hexagon,...
         std::string bodyNodes;  // empty/0 = keep node count; comma list cycles per plant, e.g. 0,5,4
+        std::string recolor = "1";  // comma list cycles per plant: 1 = recolor to i%7 (pitch class variety), 0 = keep species color (color IS ecology: energy inflow and food chain are per-color)
     };
 
     std::vector<std::string> splitList(std::string const& text)
@@ -412,9 +413,12 @@ namespace
                     std::cerr << "Could not read seed " << seedFile << std::endl;
                     return 1;
                 }
-                auto color = i % 7;
-                DescEditService::get().randomizeCellColors(seed, {color});
-                DescEditService::get().randomizeGenomeColors(seed, {color});
+                auto recolorList = splitList(garden.recolor);
+                if (recolorList[i % recolorList.size()] == "1") {
+                    auto color = i % 7;
+                    DescEditService::get().randomizeCellColors(seed, {color});
+                    DescEditService::get().randomizeGenomeColors(seed, {color});
+                }
                 for (auto& creature : seed._creatures) {
                     creature.lineageId(i + 1);
                 }
@@ -550,6 +554,7 @@ int main(int argc, char** argv)
         create->add_option(
             "--body-shape", garden.bodyShape, "Rewrite seed genome gene shapes; comma list cycles per plant (keep|segment|triangle|rectangle|hexagon|tube|largelolli|smalllolli|zigzag)");
         create->add_option("--body-nodes", garden.bodyNodes, "Resize each gene to N nodes; comma list cycles per plant (0 = keep)");
+        create->add_option("--recolor", garden.recolor, "Comma list cycling per plant: 1 = recolor to i%7, 0 = keep species color (color drives energy inflow and food chain)");
 
         CLI11_PARSE(app, argc, argv);
 

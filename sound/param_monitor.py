@@ -17,7 +17,7 @@ from collections import deque
 
 import dearpygui.dearpygui as dpg
 
-WINDOW_SEC = 120.0
+WINDOW_SEC = 120.0  # live UI window; --window overrides (0 = keep everything)
 NUM_SLOTS = 8
 
 # alien's 7 ecosystem colors (approximation of the original palette order)
@@ -84,30 +84,32 @@ def parse_packet(data: bytes):
 # ---------- data model ----------
 
 class Series:
-    def __init__(self):
+    def __init__(self, window=WINDOW_SEC):
+        self.window = window
         self.t = deque()
         self.v = deque()
 
     def add(self, t, v):
         self.t.append(t)
         self.v.append(v)
-        cutoff = t - WINDOW_SEC
-        while self.t and self.t[0] < cutoff:
-            self.t.popleft()
-            self.v.popleft()
+        if self.window > 0:
+            cutoff = t - self.window
+            while self.t and self.t[0] < cutoff:
+                self.t.popleft()
+                self.v.popleft()
 
     def xy(self):
         return list(self.t), list(self.v)
 
 
 class Model:
-    def __init__(self):
+    def __init__(self, window=WINDOW_SEC):
         self.lock = threading.Lock()
         self.t0 = time.time()
-        self.stats = {name: Series() for name in ("numCells", "totalEnergy", "tps", "attacks")}
+        self.stats = {name: Series(window) for name in ("numCells", "totalEnergy", "tps", "attacks")}
         # per-slot lineage series; slots assigned like the SC patch (by arrival order per tick)
         self.lineage = [
-            {name: Series() for name in ("pop", "muscle", "attack", "mut", "gen")}
+            {name: Series(window) for name in ("pop", "muscle", "attack", "mut", "gen")}
             for _ in range(NUM_SLOTS)
         ]
         self.slot_lineage_id = [-1] * NUM_SLOTS
@@ -274,9 +276,10 @@ def main():
     parser.add_argument("--export-every", type=float, default=0.0)
     parser.add_argument("--exit-after", type=float, default=0.0)
     parser.add_argument("--headless", action="store_true", help="no UI window; collect OSC and export only")
+    parser.add_argument("--window", type=float, default=WINDOW_SEC, help="seconds of history to keep (0 = everything; use for long recordings)")
     args = parser.parse_args()
 
-    model = Model()
+    model = Model(window=args.window)
     threading.Thread(target=receiver_thread, args=(model, args.server, args.port), daemon=True).start()
 
     start = time.time()
