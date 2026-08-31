@@ -1,7 +1,7 @@
 # AI_HANDOFF
 
 > Contract: `portable-agent-handoff/v1`
-> Captured: `2026-08-31T17:30:00+09:00`
+> Captured: `2026-08-31T22:10:00+09:00`
 > Scope: chrxh/alien フォーク上の生成庭園プロジェクト — CUDA 生態系をヘッドレス実行し、独自ビジュアル(墨インク)と SuperCollider ソニフィケーションをリアルタイム配信する制作環境の引き継ぎ。
 
 ## Status
@@ -55,9 +55,9 @@ Start by checking the real checkout, branch/worktree, and dirty state. Do not as
 
 ## Pending Work
 
-1. `[IN_PROGRESS]` wild の長期進化観察 — acceptance condition: 数時間〜一晩の育成で系統分岐(現 49)がどこまで進むかを全期間モニタ + 定期 save で記録し、種分化イベントをグラフと絵で提示できること。
-2. `[UNKNOWN]` 組曲の楽曲設計(尺・順序・カタクリズム配置・遷移の演出)— first check: `scripts/suite.sh` の GARDENS 配列と `takes/suite-*.mp4` を聴き、現行 4 楽章の構成課題(各楽章の音量バランス・遷移の唐突さ)を洗い出す。
-3. `[UNKNOWN]` viz の色彩バリエーション(墨+差し色の次)— first check: `viz/alien_viz.py` の ink シェーダ定数(POINTS_FRAG / STROKE_FRAG)と `--look glow` の現状を確認。
+1. `[IN_PROGRESS]` wild の長期進化観察 — mmmmm の tmux `alien-srv`(wild-mature、800 TPS)+ `alien-keeper`(1時間ごと `/alien/save` → `archive/`)が走行中。acceptance condition: 系統分岐(開始時 49)の推移を `logs/wild-long.log` から再構成し、種分化イベントをグラフと絵で提示できること。
+2. `[UNKNOWN]` 組曲 v3 のユーザー試聴と調整 — first check: `takes/suite-20260831-214722.mp4`(rain→islands→wild→colosseum、loudnorm 済み)を聴き、尺・順序・カタクリズム量の好みを確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
+3. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: `viz/aizuri-rain.png` を見る。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
 4. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
 
 ## Blockers and Decisions Needed
@@ -111,3 +111,4 @@ Do not treat the conversation summary as a substitute for this document. Do not 
 | Timestamp | Agent / session label | Change | Evidence |
 | --- | --- | --- | --- |
 | `2026-08-31` | `Claude Code` | initial capture(移行・5庭・組曲完成時点) | git ab7b98cf7 / 本書の VERIFIED 項目 |
+| `2026-08-31` | `Claude Code` | wild 長期観察を稼働(自動セーブ付き)、組曲 v3(楽曲構成・loudnorm)、aizuri ルック、rain/islands シーン取り違え修正(両ホスト)、ctl のセッション/ポート env 化 | git afd774b69; suite `takes/suite-20260831-214722.mp4` |
