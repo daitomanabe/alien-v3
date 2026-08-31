@@ -1,45 +1,55 @@
 #!/usr/bin/env bash
 # Record a garden suite: one take per garden with its own sound profile,
-# then concatenate everything with crossfades on a paper-colored canvas.
-# Usage: scripts/suite.sh [seconds_per_garden]
+# loudness-normalize each movement, then concatenate with slow crossfades
+# on a paper-colored canvas.
+# Usage: scripts/suite.sh
+# Movement list (scene profile tps length cataclysm_pulses) is edited below —
+# the suite is a composition, not a batch job.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-LEN="${1:-60}"
 STAMP=$(date +%Y%m%d-%H%M%S)
+# record on a second server slot so the long-running garden keeps growing
+export ALIEN_SESSION=alien-suite
+export ALIEN_OSC_PORT=12040
+export ALIEN_GEOM_PORT=12041
 CANVAS=1440
-XFADE=1.5
+XFADE=3.0
 PAPER=0xF4F1EA
+LUFS=-18
 
-# scene  profile  tps
+# The arc: quiet falling rain -> polyphonic wooden archipelago ->
+# the wild in full life -> the colosseum's hunt as finale.
 GARDENS=(
-  "wild-mature.sim wild 500"
-  "rain-mature.sim rain 400"
-  "islands-mature.sim islands 400"
-  "colosseum2-mature.sim colosseum 400"
+  "rain-mature.sim rain 400 45 0"
+  "islands-mature.sim islands 400 55 0"
+  "wild-mature.sim wild 500 65 0"
+  "colosseum2-mature.sim colosseum 400 70 2"
 )
 
 CLIPS=()
 for entry in "${GARDENS[@]}"; do
-  read -r scene profile tps <<< "$entry"
-  echo "=== ${scene} (${profile}, ${tps} TPS) ==="
+  read -r scene profile tps len pulses <<< "$entry"
+  echo "=== ${scene} (${profile}, ${tps} TPS, ${len}s, pulses ${pulses}) ==="
   bash scripts/alien-ctl.sh start "$scene" "$tps" > /dev/null
   sleep 8
-  bash scripts/take.sh "$LEN" "suite-${profile}" 0 12000 12001 "$profile" > "/tmp/suite-${profile}.log" 2>&1
-  CLIP=$(ls "takes/suite-${profile}"-*.mp4 | tail -1)
-  CLIPS+=("$CLIP")
-  echo "clip: $CLIP"
+  bash scripts/take.sh "$len" "suite-${profile}" "$pulses" "$ALIEN_OSC_PORT" "$ALIEN_GEOM_PORT" "$profile" > "/tmp/suite-${profile}.log" 2>&1
+  RAW=$(ls "takes/suite-${profile}"-*.mp4 | tail -1)
+  NORM="takes/norm-${profile}-${STAMP}.mp4"
+  ffmpeg -y -loglevel error -i "$RAW" -c:v copy -af "loudnorm=I=${LUFS}:TP=-1.5:LRA=11" -c:a aac -b:a 192k "$NORM"
+  CLIPS+=("$NORM")
+  echo "movement: $NORM"
 done
 
-echo "=== concatenating ${#CLIPS[@]} clips ==="
+echo "=== concatenating ${#CLIPS[@]} movements ==="
 INPUTS=()
-NORM=""
+NORMF=""
 for i in "${!CLIPS[@]}"; do
   INPUTS+=(-i "${CLIPS[$i]}")
-  NORM+="[${i}:v]scale=${CANVAS}:${CANVAS}:force_original_aspect_ratio=decrease,pad=${CANVAS}:${CANVAS}:(ow-iw)/2:(oh-ih)/2:color=${PAPER},setsar=1,fps=30,format=yuv420p[v${i}];"
+  NORMF+="[${i}:v]scale=${CANVAS}:${CANVAS}:force_original_aspect_ratio=decrease,pad=${CANVAS}:${CANVAS}:(ow-iw)/2:(oh-ih)/2:color=${PAPER},setsar=1,fps=30,format=yuv420p[v${i}];"
 done
 
-FILTER="$NORM"
+FILTER="$NORMF"
 PREV_V="v0"
 PREV_A="0:a"
 OFFSET=0

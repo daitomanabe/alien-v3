@@ -12,9 +12,10 @@ set -euo pipefail
 
 HOST="${ALIEN_HOST:-mmmmm4090-ubuntu}"
 REMOTE_DIR='~/workspaces/alien-v3'
-SESSION=alien-srv
+SESSION="${ALIEN_SESSION:-alien-srv}"
 SERVER_IP="${ALIEN_IP:-100.70.183.86}"
-OSC_PORT=12000
+OSC_PORT="${ALIEN_OSC_PORT:-12000}"
+GEOM_PORT="${ALIEN_GEOM_PORT:-12001}"
 
 cmd="${1:-status}"
 
@@ -23,18 +24,18 @@ case "$cmd" in
     scene="${2:-hanging-garden.sim}"
     tps="${3:-200}"
     ssh "$HOST" "tmux kill-session -t $SESSION 2>/dev/null; tmux new -d -s $SESSION \
-      \"cd $REMOTE_DIR/build-ninja/Release && ./alien_server -i ../../scenes/$scene --rate 20 --tps $tps 2>&1 | tee /tmp/alien-srv.log\""
+      \"cd $REMOTE_DIR/build-ninja/Release && ./alien_server -i ../../scenes/$scene --rate 20 --tps $tps --osc-listen $OSC_PORT --geom-listen $GEOM_PORT 2>&1 | tee /tmp/alien-$SESSION.log\""
     sleep 3
-    ssh "$HOST" 'head -3 /tmp/alien-srv.log'
+    ssh "$HOST" "head -3 /tmp/alien-$SESSION.log"
     ;;
   stop)
     ssh "$HOST" "tmux kill-session -t $SESSION 2>/dev/null && echo stopped || echo not-running"
     ;;
   status)
-    ssh "$HOST" "tmux has-session -t $SESSION 2>/dev/null && echo RUNNING || echo STOPPED; tail -3 /tmp/alien-srv.log 2>/dev/null"
+    ssh "$HOST" "tmux has-session -t $SESSION 2>/dev/null && echo RUNNING || echo STOPPED; tail -3 /tmp/alien-$SESSION.log 2>/dev/null"
     ;;
   log)
-    ssh "$HOST" "tail -${2:-20} /tmp/alien-srv.log"
+    ssh "$HOST" "tail -${2:-20} /tmp/alien-$SESSION.log"
     ;;
   scenes)
     ssh "$HOST" "ls -la $REMOTE_DIR/scenes/"

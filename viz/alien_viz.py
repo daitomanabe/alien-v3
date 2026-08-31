@@ -171,6 +171,8 @@ void main() {
 POINTS_FRAG = """
 #version 330
 uniform float u_ink;
+uniform vec3 u_fluid_ink;
+uniform float u_fluid_amount;
 in vec3 v_color;
 in float v_kind;
 out vec4 f_color;
@@ -189,9 +191,9 @@ void main() {
         } else if (v_kind > 1.5) {          // attack: vermilion blot
             inkColor = vec3(0.78, 0.10, 0.04);
             amount = 0.45;
-        } else if (v_kind > 0.5) {   // fluid: faint wash
-            inkColor = vec3(0.38, 0.40, 0.46);
-            amount = 0.035;
+        } else if (v_kind > 0.5) {   // fluid: wash color set per look (grey ink / aizuri indigo)
+            inkColor = u_fluid_ink;
+            amount = u_fluid_amount;
         } else {                     // cell: sumi with a trace of lineage color
             inkColor = mix(vec3(0.09, 0.09, 0.12), v_color * 0.75, 0.55);
             amount = 0.40;
@@ -336,7 +338,7 @@ def main():
     parser.add_argument("--port", type=int, default=12001)
     parser.add_argument("--world", default="5000x1500", help="world size WxH (matches the loaded scene)")
     parser.add_argument("--width", type=int, default=1500)
-    parser.add_argument("--look", choices=["ink", "glow"], default="ink")
+    parser.add_argument("--look", choices=["ink", "aizuri", "glow"], default="ink")
     parser.add_argument("--decay", type=float, default=0.0, help="trail decay per frame (0 = per-look default)")
     parser.add_argument("--snapshot", default="", help="write a PPM of the screen to this path after --snapshot-after seconds")
     parser.add_argument("--snapshot-after", type=float, default=15.0)
@@ -347,10 +349,13 @@ def main():
     world_w, world_h = (float(v) for v in args.world.split("x"))
     win_w = args.width
     win_h = max(200, int(win_w * world_h / world_w))
-    ink = args.look == "ink"
+    ink = args.look in ("ink", "aizuri")
+    aizuri = args.look == "aizuri"
     decay = args.decay if args.decay > 0 else (0.90 if ink else 0.94)
     bleed = 0.35 if ink else 0.0
     ink_strength = 1.6
+    fluid_ink = (0.10, 0.20, 0.52) if aizuri else (0.38, 0.40, 0.46)
+    fluid_amount = 0.12 if aizuri else 0.035
 
     receiver = GeomReceiver(args.server, args.port)
 
@@ -400,6 +405,8 @@ def main():
     points_prog["u_world"].value = (world_w, world_h)
     points_prog["u_ink"].value = 1.0 if ink else 0.0
     points_prog["u_point_scale"].value = point_scale
+    points_prog["u_fluid_ink"].value = fluid_ink
+    points_prog["u_fluid_amount"].value = fluid_amount
     stroke_prog["u_world"].value = (world_w, world_h)
     stroke_prog["u_viewport"].value = (fb_w, fb_h)
     stroke_prog["u_ink"].value = 1.0 if ink else 0.0
