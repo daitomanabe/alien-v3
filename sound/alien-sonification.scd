@@ -18,7 +18,7 @@
 // this sclang's port (works through one-way tailnet sharing).
 // ~alienServerPort may be preset (e.g. by test-capture.scd argv) to listen to
 // another garden: 12000 main / 12020 rain / 12030 islands.
-~alienServerAddr = NetAddr("100.87.26.1", ~alienServerPort ? 12000);
+~alienServerAddr = NetAddr(~alienServerHost ? "100.70.183.86", ~alienServerPort ? 12000);
 
 s.options.numInputBusChannels = 0;
 s.options.sampleRate = 44100;
@@ -39,6 +39,34 @@ s.waitForBoot({
 		sig = RLPF.ar(sig, (freq * 3 * bright).clip(80, 9000), 0.35);
 		sig = sig * tremolo * env * amp.lag(0.4);
 		Out.ar(out, Pan2.ar(sig, pan.lag(0.5)));
+	}).add;
+
+	// garden-specific attack voices --------------------------------------
+	SynthDef(\drip, {   // rain: a falling water drop
+		|out = 0, pan = 0, freq = 900, amp = 0.2|
+		var env, sig;
+		env = EnvGen.ar(Env.perc(0.001, 0.22), doneAction: 2);
+		sig = SinOsc.ar(freq * EnvGen.ar(Env.new([1.8, 1.0, 0.55], [0.012, 0.14])));
+		sig = sig + (BPF.ar(WhiteNoise.ar(0.5), freq * 2, 0.3) * EnvGen.ar(Env.perc(0.0005, 0.03)));
+		Out.ar(out, Pan2.ar(sig * env * amp, pan));
+	}).add;
+
+	SynthDef(\tickWood, {   // islands: dry wooden knock
+		|out = 0, pan = 0, freq = 900, amp = 0.2|
+		var env, sig;
+		env = EnvGen.ar(Env.perc(0.0005, 0.07), doneAction: 2);
+		sig = Ringz.ar(Impulse.ar(0), freq.clip(300, 2600), 0.028, 0.6);
+		sig = sig + (BPF.ar(PinkNoise.ar(0.6), freq * 1.5, 0.5) * EnvGen.ar(Env.perc(0.0005, 0.02)));
+		Out.ar(out, Pan2.ar(sig * env * amp, pan));
+	}).add;
+
+	SynthDef(\tickSoft, {   // wild: soft earthen tap
+		|out = 0, pan = 0, freq = 900, amp = 0.2|
+		var env, sig;
+		env = EnvGen.ar(Env.perc(0.002, 0.11), doneAction: 2);
+		sig = LPF.ar(WhiteNoise.ar(1), freq.clip(300, 1800));
+		sig = sig + SinOsc.ar(freq * 0.25, 0, 0.6);
+		Out.ar(out, Pan2.ar(sig * env * amp * 0.8, pan));
 	}).add;
 
 	SynthDef(\attackTick, {
@@ -117,6 +145,19 @@ s.waitForBoot({
 
 	~attackBudget = 12;   // max ticks scheduled per OSC frame to protect the server
 
+	// ---------- garden sound profiles ----------
+	// ~gardenProfile may be preset (test-capture argv) : \default \rain \islands \wild \colosseum
+	~profiles = (
+		default: (attackDef: \attackTick, attackAmp: 0.09, droneBright: 1.0, verbRoom: 0.6, verbMixScale: 1.0, tremoloScale: 1.0),
+		colosseum: (attackDef: \attackTick, attackAmp: 0.11, droneBright: 1.15, verbRoom: 0.45, verbMixScale: 0.8, tremoloScale: 1.3),
+		rain: (attackDef: \drip, attackAmp: 0.14, droneBright: 0.85, verbRoom: 0.85, verbMixScale: 1.4, tremoloScale: 0.6),
+		islands: (attackDef: \tickWood, attackAmp: 0.13, droneBright: 1.0, verbRoom: 0.7, verbMixScale: 1.1, tremoloScale: 1.0),
+		wild: (attackDef: \tickSoft, attackAmp: 0.12, droneBright: 0.9, verbRoom: 0.72, verbMixScale: 1.2, tremoloScale: 0.85)
+	);
+	~profile = ~profiles.at((~gardenProfile ? \default)) ? ~profiles.at(\default);
+	~master.set(\verbRoom, ~profile.at(\verbRoom));
+	"garden profile: %".format(~gardenProfile ? \default).postln;
+
 	// ---------- OSC handlers ----------
 	OSCdef(\alienWorld, { |msg|
 		~worldW = msg[1].asFloat.max(1);
@@ -131,7 +172,7 @@ s.waitForBoot({
 		// more total energy -> brighter master; huge worlds get roomier verb
 		// (range tuned to Hanging Garden: totalEnergy sits around 1.5e4..1e5)
 		~master.set(\cutoff, energy.linexp(5e3, 2e5, 1200, 9000).clip(300, 16000));
-		~master.set(\verbMix, numCells.linlin(0, 100000, 0.15, 0.45).clip(0.1, 0.5));
+		~master.set(\verbMix, (numCells.linlin(0, 100000, 0.15, 0.45) * ~profile.at(\verbMixScale)).clip(0.1, 0.6));
 		~attackBudget = 12;
 	}, '/alien/stats');
 
@@ -179,10 +220,11 @@ s.waitForBoot({
 
 		pan = (slot / (8 - 1) * 1.6) - 0.8;
 
+		shimmer = (shimmer * ~profile.at(\tremoloScale)).clip(0, 1);
 		if(~slots[slot].isNil, {
 			~slots[slot] = Synth(\lineageDrone, [
 				\out, ~droneBus, \freq, freq, \amp, amp, \pan, pan,
-				\shimmer, shimmer, \grit, grit, \detune, detune
+				\shimmer, shimmer, \grit, grit, \detune, detune, \bright, ~profile.at(\droneBright)
 			]);
 		}, {
 			~slots[slot].set(\freq, freq, \amp, amp, \pan, pan,
@@ -200,11 +242,11 @@ s.waitForBoot({
 			pan = space[0];
 			dist = space[1];
 			freq = y.linexp(0, ~worldH, 2400, 300);
-			amp = 0.09 * dist.linlin(0, 1.2, 1.0, 0.35);   // events far from center sound farther
+			amp = ~profile.at(\attackAmp) * dist.linlin(0, 1.2, 1.0, 0.35);   // events far from center sound farther
 			// spread the ticks of one frame over ~60 ms so dense predation
 			// reads as granular rain instead of one merged click
 			SystemClock.sched(rrand(0.0, 0.06), {
-				Synth(\attackTick, [\out, ~eventBus, \pan, pan, \freq, freq, \amp, amp], addAction: \addToHead);
+				Synth(~profile.at(\attackDef), [\out, ~eventBus, \pan, pan, \freq, freq, \amp, amp], addAction: \addToHead);
 				nil;
 			});
 		});

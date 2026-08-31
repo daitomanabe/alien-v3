@@ -10,10 +10,10 @@
 #   scripts/alien-ctl.sh save                   snapshot the running simulation to saved-<timestep>.sim on the server
 set -euo pipefail
 
-HOST=raytrek4090
+HOST="${ALIEN_HOST:-mmmmm4090-ubuntu}"
 REMOTE_DIR='~/workspaces/alien-v3'
 SESSION=alien-srv
-SERVER_IP=100.87.26.1
+SERVER_IP="${ALIEN_IP:-100.70.183.86}"
 OSC_PORT=12000
 
 cmd="${1:-status}"

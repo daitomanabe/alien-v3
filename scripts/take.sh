@@ -12,6 +12,8 @@ LABEL="${2:-take}"
 PULSES="${3:-0}"
 OSC_PORT="${4:-12000}"
 GEOM_PORT="${5:-12001}"
+SERVER_IP="${ALIEN_IP:-100.70.183.86}"
+PROFILE="${6:-default}"
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="takes/${LABEL}-${STAMP}.mp4"
 mkdir -p takes
@@ -24,11 +26,11 @@ sleep 0.5
 rm -f sound/test-capture.aiff
 
 echo "audio: starting sclang (records ${SECONDS_LEN}s after 15s warmup)"
-nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.scd "$SECONDS_LEN" "$OSC_PORT" > /tmp/take-sclang.log 2>&1 &
+nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.scd "$SECONDS_LEN" "$OSC_PORT" "$SERVER_IP" "$PROFILE" > /tmp/take-sclang.log 2>&1 &
 
 sleep 13
 echo "video: starting renderer"
-(viz/venv/bin/python viz/alien_viz.py --look ink --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
+(viz/venv/bin/python viz/alien_viz.py --look ink --server "$SERVER_IP" --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
     --exit-after $((SECONDS_LEN + 6)) > /tmp/take-viz.log 2>&1 &)
 
 if [ "$PULSES" -gt 0 ]; then

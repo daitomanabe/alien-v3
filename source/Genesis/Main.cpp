@@ -47,6 +47,46 @@ namespace
         return {std::stoi(text.substr(0, sep)), std::stoi(text.substr(sep + 1))};
     }
 
+    // --- self-contained fBm value noise for organic terrain ---
+    float hashToUnit(int x, int y, unsigned seed)
+    {
+        auto h = static_cast<unsigned>(x) * 374761393u + static_cast<unsigned>(y) * 668265263u + seed * 2246822519u;
+        h = (h ^ (h >> 13)) * 1274126177u;
+        return static_cast<float>((h ^ (h >> 16)) & 0xFFFFFF) / 16777216.0f;
+    }
+
+    float valueNoise(float x, float y, unsigned seed)
+    {
+        auto xi = static_cast<int>(std::floor(x));
+        auto yi = static_cast<int>(std::floor(y));
+        auto fx = x - xi;
+        auto fy = y - yi;
+        auto sx = fx * fx * (3.0f - 2.0f * fx);
+        auto sy = fy * fy * (3.0f - 2.0f * fy);
+        auto v00 = hashToUnit(xi, yi, seed);
+        auto v10 = hashToUnit(xi + 1, yi, seed);
+        auto v01 = hashToUnit(xi, yi + 1, seed);
+        auto v11 = hashToUnit(xi + 1, yi + 1, seed);
+        auto a = v00 + (v10 - v00) * sx;
+        auto b = v01 + (v11 - v01) * sx;
+        return a + (b - a) * sy;
+    }
+
+    float fbm(float x, float y, unsigned seed, int octaves = 4)
+    {
+        auto amplitude = 0.5f;
+        auto frequency = 1.0f;
+        auto sum = 0.0f;
+        auto norm = 0.0f;
+        for (int i = 0; i < octaves; ++i) {
+            sum += amplitude * valueNoise(x * frequency, y * frequency, seed + i * 101);
+            norm += amplitude;
+            amplitude *= 0.5f;
+            frequency *= 2.0f;
+        }
+        return sum / norm;
+    }
+
     RealVector2D centerOfCells(std::vector<ObjectDesc> const& objects)
     {
         RealVector2D sum;
@@ -226,8 +266,10 @@ namespace
     {
         int worldW = 4000;
         int worldH = 1200;
-        std::string layout = "shelves";  // shelves | spiral
+        std::string layout = "shelves";  // shelves | spiral | islands | wild
         float spiralTurns = 2.6f;
+        float terrainScale = 380.0f;  // wild: noise feature size in world units
+        int rockPoints = 26000;       // wild: approximate solid point budget
         int shelves = 4;
         float amplitude = 50.0f;
         float wavelength = 900.0f;
@@ -361,6 +403,70 @@ namespace
                 object.color(garden.shelfColor);
                 object.type(FluidDesc());
                 content._objects.push_back(object);
+            }
+        } else if (garden.layout == "wild") {
+            // --- organic terrain: no drawn geometry, only a noise field ---
+            // rocks scatter where the field is high (cloudy reefs with no readable
+            // outline), fluid pools in the lowlands, life is seeded on the shores.
+            auto height = [&](float x, float y) { return fbm(x / garden.terrainScale, y / garden.terrainScale, garden.rngSeed, 4); };
+
+            auto rockThreshold = 0.60f;
+            size_t placed = 0;
+            size_t attempts = 0;
+            auto maxAttempts = static_cast<size_t>(garden.rockPoints) * 60;
+            while (placed < static_cast<size_t>(garden.rockPoints) && attempts++ < maxAttempts) {
+                auto x = unit(rng) * garden.worldW;
+                auto y = unit(rng) * garden.worldH;
+                auto v = height(x, y);
+                if (v <= rockThreshold || unit(rng) > (v - rockThreshold) * 4.0f) {
+                    continue;
+                }
+                // one accepted site becomes a small pebble cluster
+                auto clusterSize = 2 + static_cast<int>(unit(rng) * 5);
+                for (int p = 0; p < clusterSize && placed < static_cast<size_t>(garden.rockPoints); ++p) {
+                    auto a = unit(rng) * 6.2831853f;
+                    auto r = unit(rng) * 3.2f;
+                    addSolidPoint(content, x + r * std::cos(a), y + r * std::sin(a), garden.shelfColor);
+                    ++placed;
+                }
+                // occasionally a whisker grows off the rock
+                if (unit(rng) < 0.06f) {
+                    auto wa = unit(rng) * 6.2831853f;
+                    auto length = garden.tendrilLength * (0.3f + 0.5f * unit(rng));
+                    for (float d = 2.0f; d <= length; d += 1.0f) {
+                        auto sway = 3.5f * std::sin(d * 0.2f + x);
+                        addSolidPoint(content, x + std::cos(wa) * d - std::sin(wa) * sway, y + std::sin(wa) * d + std::cos(wa) * sway, garden.shelfColor);
+                    }
+                }
+            }
+
+            // seeds on the shores: the mid-band between rock and open water
+            attempts = 0;
+            while (static_cast<int>(seedPositions.size()) < garden.numSeeds && attempts++ < 200000) {
+                auto x = garden.worldW * (0.06f + 0.88f * unit(rng));
+                auto y = garden.worldH * (0.06f + 0.88f * unit(rng));
+                auto v = height(x, y);
+                if (v > 0.46f && v < 0.58f) {
+                    seedPositions.push_back({x, y});
+                }
+            }
+
+            // fluid pools in the lowlands
+            attempts = 0;
+            int placedFluid = 0;
+            while (placedFluid < garden.fluidParticles && attempts++ < static_cast<size_t>(garden.fluidParticles) * 40) {
+                auto x = unit(rng) * garden.worldW;
+                auto y = unit(rng) * garden.worldH;
+                auto v = height(x, y);
+                if (v < 0.47f && unit(rng) < (0.47f - v) * 3.0f) {
+                    auto object = ObjectDesc();
+                    object.pos({x, y});
+                    object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
+                    object.color(garden.shelfColor);
+                    object.type(FluidDesc());
+                    content._objects.push_back(object);
+                    ++placedFluid;
+                }
             }
         } else if (garden.layout == "islands") {
             // --- archipelago: ring walls with an opening facing the inner sea ---
@@ -617,7 +723,9 @@ int main(int argc, char** argv)
         create->add_option("--params", paramsFile, "SimulationParameters JSON (from dump)");
         create->add_option("--seed", seedFiles, "Seed .content file(s) from dump (repeatable)");
         create->add_option("--world", worldText, "World size WxH");
-        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral | islands");
+        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral | islands | wild");
+        create->add_option("--terrain-scale", garden.terrainScale, "wild: noise feature size in world units");
+        create->add_option("--rock-points", garden.rockPoints, "wild: solid point budget");
         create->add_option("--turns", garden.spiralTurns, "Spiral turns (layout=spiral)");
         create->add_option("--shelves", garden.shelves, "Number of shelves");
         create->add_option("--amplitude", garden.amplitude, "Shelf wave amplitude");

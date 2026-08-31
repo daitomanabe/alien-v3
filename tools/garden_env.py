@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import math
+import random
 
 # ForceField_ enum (SimulationParametersTypes.h)
 FF_NONE, FF_RADIAL, FF_CENTRAL, FF_LINEAR, FF_PERLIN = 0, 1, 2, 3, 4
@@ -194,11 +195,48 @@ def design_islands(p: Params, world_w, world_h, num_islands=8):
     apply_layer(p, 10, "Open sea", (cx, cy), ("circ", ring_r * 0.5), ring_r * 0.25, "off")
 
 
+def design_wild(p: Params, world_w, world_h, rng_seed=7):
+    """Nothing drawn, nothing centered. A soft world-wide breath, a gentle
+    settling gravity, and a handful of blurry weather patches whose fade radii
+    equal their cores — no readable circles, just regions where the air feels
+    different. Terrain comes from the genesis 'wild' layout noise."""
+    rnd = random.Random(rng_seed)
+
+    apply_layer(p, 0, "Breath", (world_w / 2, world_h / 2), ("rect", world_w, world_h), 0, ("perlin", 0.006, 170, 9000))
+    apply_layer(p, 1, "Settling", (world_w / 2, world_h / 2), ("rect", world_w, world_h), 0, ("linear", 2e-5, 180.0))
+
+    weathers = [
+        ("perlin", 0.012, 70, 3500),
+        ("linear", 0.0012, rnd.uniform(0, 360)),
+        ("radial", 0.02, rnd.choice([CW, CCW]), 0.0),
+        ("perlin", 0.009, 120, 6000),
+    ]
+    for i, weather in enumerate(weathers):
+        x = world_w * rnd.uniform(0.15, 0.85)
+        y = world_h * rnd.uniform(0.15, 0.85)
+        r = min(world_w, world_h) * rnd.uniform(0.10, 0.18)
+        apply_layer(p, 2 + i, f"Weather {chr(65 + i)}", (x, y), ("circ", r), r * 1.2, weather)
+
+    apply_layer(p, 6, "Parked A", (world_w * 0.03, world_h * 0.03), ("circ", 40), 20, "off")
+    apply_layer(p, 7, "Parked B", (world_w * 0.97, world_h * 0.03), ("circ", 40), 20, "off")
+
+    for i, layer in enumerate((8, 9)):
+        x = world_w * rnd.uniform(0.2, 0.8)
+        y = world_h * rnd.uniform(0.55, 0.9)
+        r = min(world_w, world_h) * rnd.uniform(0.14, 0.2)
+        apply_layer(p, layer, f"Soil {i}", (x, y), ("circ", r), r * 1.3, "off")
+    x = world_w * rnd.uniform(0.3, 0.7)
+    y = world_h * rnd.uniform(0.2, 0.5)
+    r = min(world_w, world_h) * 0.15
+    apply_layer(p, 10, "Bonus", (x, y), ("circ", r), r * 1.3, "off")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands"])
+    ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands", "wild"])
+    ap.add_argument("--rng", type=int, default=7)
     ap.add_argument("--world", default="3000x3000")
     ap.add_argument(
         "--energy-pool",
@@ -214,6 +252,8 @@ def main():
         design_rain(p, w, h)
     elif args.design == "islands":
         design_islands(p, w, h)
+    elif args.design == "wild":
+        design_wild(p, w, h, args.rng)
     else:
         design_vortex(p, w, h)
     if args.energy_pool > 0:

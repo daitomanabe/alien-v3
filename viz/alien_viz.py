@@ -332,7 +332,7 @@ void main() {
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server", default="100.87.26.1")
+    parser.add_argument("--server", default="100.70.183.86")
     parser.add_argument("--port", type=int, default=12001)
     parser.add_argument("--world", default="5000x1500", help="world size WxH (matches the loaded scene)")
     parser.add_argument("--width", type=int, default=1500)

@@ -270,7 +270,7 @@ def export_png(model: Model, path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server", default="100.87.26.1")
+    parser.add_argument("--server", default="100.70.183.86")
     parser.add_argument("--port", type=int, default=12000)
     parser.add_argument("--export", default="", help="save a matplotlib PNG of all series on exit (and every --export-every s)")
     parser.add_argument("--export-every", type=float, default=0.0)
