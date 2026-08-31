@@ -21,7 +21,11 @@
 ~alienServerAddr = NetAddr(~alienServerHost ? "100.70.183.86", ~alienServerPort ? 12000);
 
 s.options.numInputBusChannels = 0;
-s.options.sampleRate = 44100;
+if((~quietMode ? false).not, {
+	s.options.sampleRate = 44100;
+});
+// quiet capture never writes to bus 0, so any bootable device stays silent;
+// leaving device and rate unset lets the boot follow the current output setup
 
 s.waitForBoot({
 	var numSlots = 8;
@@ -106,7 +110,10 @@ s.waitForBoot({
 	// ---------- state ----------
 	~droneBus = Bus.audio(s, 2);
 	~eventBus = Bus.audio(s, 2);
-	~master = Synth(\masterBus, [\droneIn, ~droneBus, \eventIn, ~eventBus, \out, 0], addAction: \addToTail);
+	// quiet mode: render to a private bus (recorded from there, nothing reaches
+	// the speakers). Set ~quietMode = true before loading this patch.
+	~recordBus = if(~quietMode ? false, { Bus.audio(s, 2) }, { 0 });
+	~master = Synth(\masterBus, [\droneIn, ~droneBus, \eventIn, ~eventBus, \out, ~recordBus], addAction: \addToTail);
 
 	~slots = Array.newClear(numSlots);          // slot -> synth
 	~slotLineage = Array.fill(numSlots, -1);    // slot -> lineageId

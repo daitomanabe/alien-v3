@@ -14,6 +14,7 @@ OSC_PORT="${4:-12000}"
 GEOM_PORT="${5:-12001}"
 SERVER_IP="${ALIEN_IP:-100.70.183.86}"
 PROFILE="${6:-default}"
+QUIET="${7:-1}"
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="takes/${LABEL}-${STAMP}.mp4"
 mkdir -p takes
@@ -22,11 +23,11 @@ set +e
 pkill -f sclang 2>/dev/null
 pkill -f scsynth 2>/dev/null
 set -e
-sleep 0.5
+sleep 2
 rm -f sound/test-capture.aiff
 
 echo "audio: starting sclang (records ${SECONDS_LEN}s after 15s warmup)"
-nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.scd "$SECONDS_LEN" "$OSC_PORT" "$SERVER_IP" "$PROFILE" > /tmp/take-sclang.log 2>&1 &
+nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.scd "$SECONDS_LEN" "$OSC_PORT" "$SERVER_IP" "$PROFILE" "$QUIET" > /tmp/take-sclang.log 2>&1 &
 
 sleep 13
 echo "video: starting renderer"
