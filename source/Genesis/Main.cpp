@@ -266,7 +266,7 @@ namespace
     {
         int worldW = 4000;
         int worldH = 1200;
-        std::string layout = "shelves";  // shelves | spiral | islands | wild
+        std::string layout = "shelves";  // shelves | spiral | islands | wild | membrane
         float spiralTurns = 2.6f;
         float terrainScale = 380.0f;  // wild: noise feature size in world units
         int rockPoints = 26000;       // wild: approximate solid point budget
@@ -459,6 +459,72 @@ namespace
                 auto y = unit(rng) * garden.worldH;
                 auto v = height(x, y);
                 if (v < 0.47f && unit(rng) < (0.47f - v) * 3.0f) {
+                    auto object = ObjectDesc();
+                    object.pos({x, y});
+                    object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
+                    object.color(garden.shelfColor);
+                    object.type(FluidDesc());
+                    content._objects.push_back(object);
+                    ++placedFluid;
+                }
+            }
+        } else if (garden.layout == "membrane") {
+            // --- contour membranes: walls follow iso-bands of the noise field,
+            // forming an organic labyrinth of curved passages and chambers ---
+            auto height = [&](float x, float y) { return fbm(x / garden.terrainScale, y / garden.terrainScale, garden.rngSeed, 4); };
+            auto bandLo = 0.545f;
+            auto bandHi = 0.575f;
+            auto step = 1.6f;
+
+            // pass 1: count candidates so the wall budget thins evenly
+            size_t candidates = 0;
+            for (float y = 0; y < garden.worldH; y += step) {
+                for (float x = 0; x < garden.worldW; x += step) {
+                    auto v = height(x, y);
+                    if (v > bandLo && v < bandHi) {
+                        ++candidates;
+                    }
+                }
+            }
+            auto keepProbability = candidates > 0 ? std::min(1.0f, static_cast<float>(garden.rockPoints) / candidates) : 0.0f;
+
+            for (float y = 0; y < garden.worldH; y += step) {
+                for (float x = 0; x < garden.worldW; x += step) {
+                    auto v = height(x, y);
+                    if (v <= bandLo || v >= bandHi || unit(rng) > keepProbability) {
+                        continue;
+                    }
+                    addSolidPoint(content, x + (unit(rng) - 0.5f), y + (unit(rng) - 0.5f), garden.shelfColor);
+                    if (unit(rng) < 0.004f) {
+                        auto wa = unit(rng) * 6.2831853f;
+                        auto length = garden.tendrilLength * (0.3f + 0.5f * unit(rng));
+                        for (float d = 2.0f; d <= length; d += 1.0f) {
+                            auto sway = 3.5f * std::sin(d * 0.2f + x);
+                            addSolidPoint(content, x + std::cos(wa) * d - std::sin(wa) * sway, y + std::sin(wa) * d + std::cos(wa) * sway, garden.shelfColor);
+                        }
+                    }
+                }
+            }
+
+            // seeds in the open chambers
+            size_t attempts = 0;
+            while (static_cast<int>(seedPositions.size()) < garden.numSeeds && attempts++ < 200000) {
+                auto x = garden.worldW * (0.06f + 0.88f * unit(rng));
+                auto y = garden.worldH * (0.06f + 0.88f * unit(rng));
+                auto v = height(x, y);
+                if (v > 0.42f && v < 0.52f) {
+                    seedPositions.push_back({x, y});
+                }
+            }
+
+            // fluid pools in the deep chambers
+            attempts = 0;
+            int placedFluid = 0;
+            while (placedFluid < garden.fluidParticles && attempts++ < static_cast<size_t>(garden.fluidParticles) * 40) {
+                auto x = unit(rng) * garden.worldW;
+                auto y = unit(rng) * garden.worldH;
+                auto v = height(x, y);
+                if (v < 0.46f && unit(rng) < (0.46f - v) * 3.0f) {
                     auto object = ObjectDesc();
                     object.pos({x, y});
                     object.vel({(unit(rng) - 0.5f) * 0.2f, (unit(rng) - 0.5f) * 0.2f});
@@ -723,7 +789,7 @@ int main(int argc, char** argv)
         create->add_option("--params", paramsFile, "SimulationParameters JSON (from dump)");
         create->add_option("--seed", seedFiles, "Seed .content file(s) from dump (repeatable)");
         create->add_option("--world", worldText, "World size WxH");
-        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral | islands | wild");
+        create->add_option("--layout", garden.layout, "Structure layout: shelves | spiral | islands | wild | membrane");
         create->add_option("--terrain-scale", garden.terrainScale, "wild: noise feature size in world units");
         create->add_option("--rock-points", garden.rockPoints, "wild: solid point budget");
         create->add_option("--turns", garden.spiralTurns, "Spiral turns (layout=spiral)");

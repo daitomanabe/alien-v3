@@ -43,21 +43,31 @@ class Params:
         if enabled is not None:
             slot["Enabled"] = fmt(enabled)
 
-    def set_pos(self, layer, x, y):
+    def set_pos(self, layer, x, y, vx=0.0, vy=0.0):
         node = self.sp["Location"]["Position (x,y)"].setdefault(f"Layer {layer}", {}).setdefault("Value", {})
         node["X"] = fmt(float(x))
         node["Y"] = fmt(float(y))
         vel = self.sp["Location"]["Velocity (x,y)"].setdefault(f"Layer {layer}", {}).setdefault("Value", {})
-        vel["X"] = fmt(0.0)
-        vel["Y"] = fmt(0.0)
+        vel["X"] = fmt(float(vx))
+        vel["Y"] = fmt(float(vy))
+
+    def set_color_values(self, path, layer, value, enabled=True):
+        """Set a per-color layer override (all 10 color slots to one value)."""
+        node = self.sp
+        for key in path:
+            node = node.setdefault(key, {})
+        slot = node.setdefault(f"Layer {layer}", {})
+        for c in range(10):
+            slot[f"Color {c}"] = fmt(float(value))
+        slot["Enabled"] = fmt(enabled)
 
     def save(self, path):
         json.dump(self.doc, open(path, "w"), indent=1)
 
 
-def apply_layer(p: Params, i, name, pos, shape, fade, field):
+def apply_layer(p: Params, i, name, pos, shape, fade, field, vel=(0.0, 0.0)):
     p.set(["General", "Layer name"], i, name)
-    p.set_pos(i, *pos)
+    p.set_pos(i, pos[0], pos[1], vel[0], vel[1])
     kind = shape[0]
     p.set(["Shape", "Shape"], i, SHAPE_CIRC if kind == "circ" else SHAPE_RECT)
     if kind == "circ":
@@ -231,11 +241,52 @@ def design_wild(p: Params, world_w, world_h, rng_seed=7):
     apply_layer(p, 10, "Bonus", (x, y), ("circ", r), r * 1.3, "off")
 
 
+def design_meridian(p: Params, world_w, world_h, rng_seed=7):
+    """A wandering sun. Two large soft zones orbit the torus forever: the Sun
+    (life is easier: lower minimum cell energy, a mild breeze) and its
+    antipodal Shadow (life is harsher). A small storm patrols on another
+    heading. The garden breathes in day/night cycles — the first garden
+    with musical time built into the environment."""
+    rnd = random.Random(rng_seed)
+    cx, cy = world_w / 2, world_h / 2
+
+    apply_layer(p, 0, "Breath", (cx, cy), ("rect", world_w, world_h), 0, ("perlin", 0.005, 170, 9000))
+
+    sun_r = min(world_w, world_h) * 0.24
+    sun_v = (0.030, 0.010)  # one x-lap every ~100k steps; slow y drift makes a Lissajous path
+    apply_layer(p, 1, "Sun", (cx - world_w * 0.25, cy), ("circ", sun_r), sun_r * 0.8, ("perlin", 0.006, 90, 5000), vel=sun_v)
+    p.set_color_values(["Cell life cycle", "Minimum energy"], 1, 35.0)
+
+    apply_layer(p, 2, "Shadow", (cx + world_w * 0.25, cy), ("circ", sun_r), sun_r * 0.8, "off", vel=sun_v)
+    p.set_color_values(["Cell life cycle", "Minimum energy"], 2, 65.0)
+
+    apply_layer(p, 3, "Storm", (cx, cy - world_h * 0.3), ("circ", sun_r * 0.5), sun_r * 0.4,
+                ("linear", 0.003, rnd.uniform(0, 360)), vel=(-0.018, 0.024))
+
+    weathers = [("perlin", 0.010, 70, 3500), ("radial", 0.02, rnd.choice([CW, CCW]), 0.0)]
+    for i, weather in enumerate(weathers):
+        x = world_w * rnd.uniform(0.2, 0.8)
+        y = world_h * rnd.uniform(0.2, 0.8)
+        r = min(world_w, world_h) * rnd.uniform(0.10, 0.15)
+        apply_layer(p, 4 + i, f"Weather {chr(65 + i)}", (x, y), ("circ", r), r * 1.2, weather)
+
+    apply_layer(p, 6, "Parked A", (world_w * 0.03, world_h * 0.03), ("circ", 40), 20, "off")
+    apply_layer(p, 7, "Parked B", (world_w * 0.97, world_h * 0.03), ("circ", 40), 20, "off")
+    for i, layer in enumerate((8, 9)):
+        x = world_w * rnd.uniform(0.2, 0.8)
+        y = world_h * rnd.uniform(0.3, 0.8)
+        r = min(world_w, world_h) * rnd.uniform(0.14, 0.2)
+        apply_layer(p, layer, f"Soil {i}", (x, y), ("circ", r), r * 1.3, "off")
+    x = world_w * rnd.uniform(0.3, 0.7)
+    y = world_h * rnd.uniform(0.2, 0.5)
+    apply_layer(p, 10, "Bonus", (x, y), ("circ", min(world_w, world_h) * 0.15), min(world_w, world_h) * 0.2, "off")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands", "wild"])
+    ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands", "wild", "meridian"])
     ap.add_argument("--rng", type=int, default=7)
     ap.add_argument("--world", default="3000x3000")
     ap.add_argument(
@@ -254,6 +305,8 @@ def main():
         design_islands(p, w, h)
     elif args.design == "wild":
         design_wild(p, w, h, args.rng)
+    elif args.design == "meridian":
+        design_meridian(p, w, h, args.rng)
     else:
         design_vortex(p, w, h)
     if args.energy_pool > 0:
