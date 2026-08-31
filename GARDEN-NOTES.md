@@ -16,12 +16,23 @@
 - **種まき時に色を塗り替えると種族の生態が壊れる**(飢餓色のハンターを豊穣色に
   塗ると狩らなくなる)→ genesis の `--recolor 1,1,1,1,0,0,0`(植物のみ着色)
 
-### 3. 種族は最低3つ(Hanging Garden の解剖結果)
+### 3. 攻撃は神経回路である(3世代の失敗の答え)
+- Attacker の発火条件はカーネルで `neuralActivity.signals[CellTypeActivation]` の
+  閾値超え = **ニューラルネットの発火信号が必要**(AttackerProcessor.cuh:53)
+- さらに AttackCreature モードは「同じ生物の近傍 Sensor の lastMatches」から獲物を
+  選ぶ — **Sensor→NN→Attacker の完全な回路**が要る
+- 裸の Attacker ノードを挿す `--arm` は従って**機能しない**(NN 配線ゼロ = 永遠に沈黙)
+- 正解: 本家の**頂点捕食者**(dump #31/#32、c0 = 流入ゼロの完全捕食色、Attacker が頭、
+  Muscle の尾×2、各1体のレア種)を**進化済みの神経回路ごと**植える
+  → scenes/apex-predator.content
+
+### 4. 種族は最低3つ+頂点(Hanging Garden の解剖結果)
 | 種族 | 色 | ゲノム構成 | 役割 | 音への寄与 |
 |---|---|---|---|---|
 | 植物 | c7/c6 | Base×2ノード | エネルギー固定・構造 | 静的ドローン(muscle 0) |
 | 泳ぐ虫 | c1 | Generator + Muscle(concat=50) | 産卵工場・攪拌 | シマー(muscle 90-190) |
-| ハンター | c2 | Muscle六角 + Sensor×2 + 尾 | 捕食(飢餓色) | grit + 攻撃クリック |
+| ハンター | c2 | Muscle六角 + Sensor×2 + 尾 | 追跡(飢餓色) | シマー強 |
+| 頂点捕食者 | c0 | Attacker頭 + Muscle尾(NN配線済) | 捕食(流入ゼロ) | grit + 攻撃クリック |
 
 v5 の種は極小(2〜4遺伝子)。「生きて増える」条件は
 **単細胞 + セル付帯 constructor + 流入色**だけで、体制(shape)は自由に書き換え可能
