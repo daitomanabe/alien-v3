@@ -1,7 +1,7 @@
 # AI_HANDOFF
 
 > Contract: `portable-agent-handoff/v1`
-> Captured: `2026-09-01T12:00:00+09:00`
+> Captured: `2026-09-01T20:45:00+09:00`
 > Scope: chrxh/alien フォーク上の生成庭園プロジェクト — CUDA 生態系をヘッドレス実行し、独自ビジュアル(墨インク)と SuperCollider ソニフィケーションをリアルタイム配信する制作環境の引き継ぎ。
 
 ## Status
@@ -55,7 +55,8 @@ Start by checking the real checkout, branch/worktree, and dirty state. Do not as
 
 ## Pending Work
 
-1. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
+1. `[IN_PROGRESS]` **日長実験**: mmmmm で meridian2(alien-srv, 12000/12001, 3140万steps・古代)と meridian3(alien-exp, 12060/12061, 太陽速度半分=800k steps/日、同一世界バイト)が並走、GPU折半で各 ~475 TPS。Mac 側 `tools/centroid_log.py` ×2 が `logs/meridian{2,3}-centroid.csv` に 1Hz 記録中。keeper は両庭を毎時 `archive/m{2,3}-saved-*.sim` に保存。**収穫**: 数時間後に `tools/centroid_analyze.py <csv> --day-seconds <日steps÷平均TPS> --out sound/meridianN-centroid.png`(m2: 400000÷TPS、m3: 800000÷TPS)。acceptance: 両群の r(half-day)/r(day) を並べ、日長2倍が追従を強めるか飽和かを判定できること。
+2. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
 2. `[UNKNOWN]` 組曲 v3 のユーザー試聴と調整 — first check: `takes/suite-20260831-214722.mp4`(rain→islands→wild→colosseum、loudnorm 済み)を聴き、尺・順序・カタクリズム量の好みを確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
 3. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: `viz/aizuri-rain.png` を見る。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
 4. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
@@ -112,4 +113,5 @@ Do not treat the conversation summary as a substitute for this document. Do not 
 | --- | --- | --- | --- |
 | `2026-08-31` | `Claude Code` | initial capture(移行・5庭・組曲完成時点) | git ab7b98cf7 / 本書の VERIFIED 項目 |
 | `2026-08-31` | `Claude Code` | wild 長期観察を稼働(自動セーブ付き)、組曲 v3(楽曲構成・loudnorm)、aizuri ルック、rain/islands シーン取り違え修正(両ホスト)、ctl のセッション/ポート env 化 | git afd774b69; suite `takes/suite-20260831-214722.mp4` |
+| `2026-09-01 夜` | `Claude Code` | 組曲 v4(晩鐘コーダ追加・5楽章 4:58)、aizuri 判断素材(fluid 6000)、server `--params` オーバーライド、日長実験 meridian3 開始(対照厳密・速度4項のみ差分)、centroid ロガー/分析を恒久ツール化、keeper 複数庭対応、録画 pipe 詰まり根治(ultrafast) | git cb321fcc6; `takes/suite-20260901-201738.mp4`; `logs/meridian{2,3}-centroid.csv` 記録中 |
 | `2026-09-01` | `Claude Code` | 6時間セッション: Meridian(巡る太陽+膜迷宮、動くゾーン初使用)v1→v2、太陽追従を重心自己相関で実証、種分化 64 系統→46 の一往復を記録、wild 11時間の生涯回収(wild-ancient)、--offscreen 録画(スロットル根絶)、meridian 鐘プロファイル | git a3c40aa40; `sound/meridian2-centroid.png` / `sound/wild-lifetime.png`; saves: meridian2-mature / meridian1-young / wild-ancient |
