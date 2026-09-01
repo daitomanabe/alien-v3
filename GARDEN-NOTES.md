@@ -68,6 +68,20 @@ v5 の種は極小(2〜4遺伝子)。「生きて増える」条件は
 - 検証手法: ジオメトリストリームを購読して生きたセルの重心を記録 → 自己相関。
   総数ではなく空間統計に周期が宿る。
 
+## 完成版宣言(2026-09-02)
+
+**Meridian(巡る太陽の庭)を自作庭の完成版とする。** 定義一式:
+
+- 種: `scenes/meridian2.sim` + `scenes/meridian2-params.json`(膜迷宮 + 動く Sun/Shadow/Storm)
+- 最終形: `scenes/meridian2-ancient.sim`(4745万 steps ≈ 118日、46系統・25.5k細胞の飽和平衡)
+- 実験対照: `scenes/meridian3-params.json`(日長2倍)と `scenes/meridian3-final.sim`(1610万 steps)
+- データ: `logs/meridian{2,3}-centroid.csv`(重心 1Hz、日長実験の一次データ)
+- 音: profiles.meridian(遠い鐘)、組曲 v4 のコーダ
+- 蘇生: `bash scripts/alien-ctl.sh start meridian2-ancient.sim 800`(mmmmm、毎時保存は keeper.sh)
+
+サーバー・keeper・ロガーは 2026-09-02 に全停止済み。中間スナップショットは
+mmmmm の `archive/m{2,3}-saved-*.sim`(毎時、20件+)にある。
+
 ## Meridian v2 の実測(6時間セッションの成果)
 
 - **生態が太陽を追う**: 生細胞重心の自己相関が半日(~290s)で -0.48、一日(~600s)で

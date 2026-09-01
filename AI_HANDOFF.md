@@ -1,7 +1,7 @@
 # AI_HANDOFF
 
 > Contract: `portable-agent-handoff/v1`
-> Captured: `2026-09-01T23:25:00+09:00`
+> Captured: `2026-09-02T09:30:00+09:00`
 > Scope: chrxh/alien フォーク上の生成庭園プロジェクト — CUDA 生態系をヘッドレス実行し、独自ビジュアル(墨インク)と SuperCollider ソニフィケーションをリアルタイム配信する制作環境の引き継ぎ。
 
 ## Status
@@ -55,11 +55,12 @@ Start by checking the real checkout, branch/worktree, and dirty state. Do not as
 
 ## Pending Work
 
-1. `[VERIFIED->収穫済]` **日長実験**: r(day) 0.41(m3, 2倍日長)> 0.30(m2朝)で「長い日は追従を強める」。古代 m2 は移動追従を失い脈動のみ(振幅1/2.4)。位相遅れは一様に約1/4日。結果と図は GARDEN-NOTES「日長実験」節。`scenes/meridian3-mature.sim`(4.26M steps)保存済み。両サーバー(srv=12000/12001 m2、exp=12060/12061 m3)と centroid ロガー×2・keeper は**走行継続中** — さらなる長期データが欲しければそのまま、不要なら `ALIEN_SESSION=alien-exp bash scripts/alien-ctl.sh stop` で m3 を畳む。
-2. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
-3. `[UNKNOWN]` 組曲 v4 のユーザー試聴と調整 — first check: 送付済み `viz/suite-v4-preview.mp4`(5楽章・晩鐘コーダ、4:58)への反応を確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
-4. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: ユーザーに送付済みの `viz/meridian2-aizuri-preview.mp4`(fluid 6000・51秒)への反応を待つ。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
-5. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
+1. `[DONE]` **庭は完成版として凍結(2026-09-02)**: ユーザー宣言により Meridian を自作庭の完成版とした。mmmmm の全サーバー・keeper・Mac のロガーは停止済み。正典ファイル(種・params・最終形・実験対照・centroid CSV)はローカル `scenes/` と `logs/` にコミット済み。最終形 = meridian2-ancient.sim(47.45M steps)/ meridian3-final.sim(16.1M steps)。蘇生手順は GARDEN-NOTES「完成版宣言」節。タグ `gardens-v1.0`。
+2. `[VERIFIED->収穫済]` **日長実験**: r(day) 0.41(m3, 2倍日長)> 0.30(m2朝)で「長い日は追従を強める」。古代 m2 は移動追従を失い脈動のみ(振幅1/2.4)。位相遅れは一様に約1/4日。結果と図は GARDEN-NOTES「日長実験」節。`scenes/meridian3-mature.sim`(4.26M steps)保存済み。両サーバー(srv=12000/12001 m2、exp=12060/12061 m3)と centroid ロガー×2・keeper は**走行継続中** — さらなる長期データが欲しければそのまま、不要なら `ALIEN_SESSION=alien-exp bash scripts/alien-ctl.sh stop` で m3 を畳む。
+3. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
+4. `[UNKNOWN]` 組曲 v4 のユーザー試聴と調整 — first check: 送付済み `viz/suite-v4-preview.mp4`(5楽章・晩鐘コーダ、4:58)への反応を確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
+5. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: ユーザーに送付済みの `viz/meridian2-aizuri-preview.mp4`(fluid 6000・51秒)への反応を待つ。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
+6. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
 
 ## Blockers and Decisions Needed
 
