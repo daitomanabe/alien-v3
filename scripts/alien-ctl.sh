@@ -23,8 +23,9 @@ case "$cmd" in
   start)
     scene="${2:-hanging-garden.sim}"
     tps="${3:-200}"
+    extra="${4:-}"
     ssh "$HOST" "tmux kill-session -t $SESSION 2>/dev/null; tmux new -d -s $SESSION \
-      \"cd $REMOTE_DIR/build-ninja/Release && ./alien_server -i ../../scenes/$scene --rate 20 --tps $tps --osc-listen $OSC_PORT --geom-listen $GEOM_PORT 2>&1 | tee /tmp/alien-$SESSION.log\""
+      \"cd $REMOTE_DIR/build-ninja/Release && ./alien_server -i ../../scenes/$scene --rate 20 --tps $tps --osc-listen $OSC_PORT --geom-listen $GEOM_PORT $extra 2>&1 | tee /tmp/alien-$SESSION.log\""
     sleep 3
     ssh "$HOST" "head -3 /tmp/alien-$SESSION.log"
     ;;

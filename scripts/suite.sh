@@ -19,12 +19,14 @@ PAPER=0xF4F1EA
 LUFS=-18
 
 # The arc: quiet falling rain -> polyphonic wooden archipelago ->
-# the wild in full life -> the colosseum's hunt as finale.
+# the wild in full life -> the colosseum's hunt -> evening bells over
+# the meridian garden as the coda.
 GARDENS=(
   "rain-mature.sim rain 400 45 0"
   "islands-mature.sim islands 400 55 0"
   "wild-mature.sim wild 500 65 0"
   "colosseum2-mature.sim colosseum 400 70 2"
+  "meridian2-mature.sim meridian 500 75 0"
 )
 
 CLIPS=()
