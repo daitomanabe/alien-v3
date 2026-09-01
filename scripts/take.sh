@@ -31,7 +31,7 @@ nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.s
 
 sleep 13
 echo "video: starting renderer"
-(viz/venv/bin/python viz/alien_viz.py --look ink --server "$SERVER_IP" --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
+(viz/venv/bin/python viz/alien_viz.py --look ink --offscreen --server "$SERVER_IP" --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
     --exit-after $((SECONDS_LEN + 6)) > /tmp/take-viz.log 2>&1 &)
 
 if [ "$PULSES" -gt 0 ]; then
@@ -39,7 +39,13 @@ if [ "$PULSES" -gt 0 ]; then
   (sleep $((SECONDS_LEN * 2 / 3 + 15)); bash scripts/alien-ctl.sh cataclysm "$PULSES" >/dev/null) &
 fi
 
-sleep $((SECONDS_LEN + 24))
+sleep $((SECONDS_LEN + 12))
+# wait until the renderer has finalized the video (moov atom written on exit)
+for _ in $(seq 1 40); do
+  pgrep -f "alien_viz.*take-video" > /dev/null || break
+  sleep 2
+done
+sleep 1
 
 if [ ! -f sound/test-capture.aiff ]; then
   echo "ERROR: no audio recorded (see /tmp/take-sclang.log)" >&2

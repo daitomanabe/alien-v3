@@ -345,6 +345,7 @@ def main():
     parser.add_argument("--exit-after", type=float, default=0.0, help="quit after N seconds (0 = run until closed)")
     parser.add_argument("--record", default="", help="record the screen to this .mp4 (via ffmpeg)")
     parser.add_argument("--record-fps", type=int, default=30)
+    parser.add_argument("--offscreen", action="store_true", help="render into an offscreen buffer: no window, immune to occlusion throttling, works with the display asleep")
     args = parser.parse_args()
     world_w, world_h = (float(v) for v in args.world.split("x"))
     win_w = args.width
@@ -372,6 +373,8 @@ def main():
 
     if not glfw.init():
         raise SystemExit("glfw init failed")
+    if args.offscreen:
+        glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     # fit the window into the monitor workarea, preserving world aspect
     try:
         _, _, wa_w, wa_h = glfw.get_monitor_workarea(glfw.get_primary_monitor())
@@ -394,9 +397,14 @@ def main():
     ctx = moderngl.create_context()
     ctx.enable(moderngl.PROGRAM_POINT_SIZE)
 
-    # use the GL-reported size: glfw's framebuffer size can disagree by a few px
-    fb_w, fb_h = ctx.screen.width, ctx.screen.height
-    point_scale = fb_w / glfw.get_window_size(window)[0]  # retina
+    if args.offscreen:
+        # fixed 2x offscreen target; immune to window/framebuffer quirks
+        fb_w, fb_h = win_w * 2, win_h * 2
+        point_scale = 2.0
+    else:
+        # use the GL-reported size: glfw's framebuffer size can disagree by a few px
+        fb_w, fb_h = ctx.screen.width, ctx.screen.height
+        point_scale = fb_w / glfw.get_window_size(window)[0]  # retina
 
     points_prog = ctx.program(vertex_shader=GEOM_VERT, fragment_shader=POINTS_FRAG)
     stroke_prog = ctx.program(vertex_shader=STROKE_VERT, fragment_shader=STROKE_FRAG)
@@ -463,7 +471,11 @@ def main():
     start_t = time.time()
     snapshot_done = False
 
-    screen = ctx.screen
+    if args.offscreen:
+        offscreen_tex = ctx.texture((fb_w, fb_h), 4)
+        screen = ctx.framebuffer(color_attachments=[offscreen_tex])
+    else:
+        screen = ctx.screen
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
@@ -531,13 +543,20 @@ def main():
         if args.record and recorder is None:
             recorder = start_recorder()
         if recorder is not None and elapsed >= rec_next_t:
-            rec_next_t = elapsed + 1.0 / args.record_fps
+            # wall-clock frame pacing: when window throttling slows drawing,
+            # duplicate the frame so the video keeps real-time length
+            raw = screen.read(components=3)
             try:
-                recorder.stdin.write(screen.read(components=3))
+                while elapsed >= rec_next_t:
+                    rec_next_t += 1.0 / args.record_fps
+                    recorder.stdin.write(raw)
             except BrokenPipeError:
                 recorder = None
 
-        glfw.swap_buffers(window)
+        if args.offscreen:
+            time.sleep(0.005)
+        else:
+            glfw.swap_buffers(window)
         cur = nxt
 
         fps_n += 1
