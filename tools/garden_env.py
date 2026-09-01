@@ -253,12 +253,14 @@ def design_meridian(p: Params, world_w, world_h, rng_seed=7):
     apply_layer(p, 0, "Breath", (cx, cy), ("rect", world_w, world_h), 0, ("perlin", 0.005, 170, 9000))
 
     sun_r = min(world_w, world_h) * 0.24
-    sun_v = (0.030, 0.010)  # one x-lap every ~100k steps; slow y drift makes a Lissajous path
+    # a long day: ecology needs time to answer the sun. One x-lap every ~400k
+    # steps (8.3 min at 800 TPS) lets growth and death track the light.
+    sun_v = (0.0075, 0.0025)
     apply_layer(p, 1, "Sun", (cx - world_w * 0.25, cy), ("circ", sun_r), sun_r * 0.8, ("perlin", 0.006, 90, 5000), vel=sun_v)
-    p.set_color_values(["Cell life cycle", "Minimum energy"], 1, 35.0)
+    p.set_color_values(["Cell life cycle", "Minimum energy"], 1, 30.0)
 
     apply_layer(p, 2, "Shadow", (cx + world_w * 0.25, cy), ("circ", sun_r), sun_r * 0.8, "off", vel=sun_v)
-    p.set_color_values(["Cell life cycle", "Minimum energy"], 2, 65.0)
+    p.set_color_values(["Cell life cycle", "Minimum energy"], 2, 75.0)
 
     apply_layer(p, 3, "Storm", (cx, cy - world_h * 0.3), ("circ", sun_r * 0.5), sun_r * 0.4,
                 ("linear", 0.003, rnd.uniform(0, 360)), vel=(-0.018, 0.024))

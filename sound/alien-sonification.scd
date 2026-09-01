@@ -73,6 +73,15 @@ s.waitForBoot({
 		Out.ar(out, Pan2.ar(sig * env * amp * 0.8, pan));
 	}).add;
 
+	SynthDef(\bellDistant, {   // meridian: a small bell far away
+		|out = 0, pan = 0, freq = 900, amp = 0.2|
+		var env, sig;
+		env = EnvGen.ar(Env.perc(0.001, 0.5), doneAction: 2);
+		sig = SinOsc.ar(freq * 2.02) * 0.4 + SinOsc.ar(freq * 3.01) * 0.25 + SinOsc.ar(freq) * 0.5;
+		sig = sig * EnvGen.ar(Env.perc(0.001, 0.4));
+		Out.ar(out, Pan2.ar(sig * env * amp * 0.7, pan));
+	}).add;
+
 	SynthDef(\attackTick, {
 		|out = 0, pan = 0, freq = 900, amp = 0.2|
 		var env, sig;
@@ -159,7 +168,8 @@ s.waitForBoot({
 		colosseum: (attackDef: \attackTick, attackAmp: 0.11, droneBright: 1.15, verbRoom: 0.45, verbMixScale: 0.8, tremoloScale: 1.3),
 		rain: (attackDef: \drip, attackAmp: 0.14, droneBright: 0.85, verbRoom: 0.85, verbMixScale: 1.4, tremoloScale: 0.6),
 		islands: (attackDef: \tickWood, attackAmp: 0.13, droneBright: 1.0, verbRoom: 0.7, verbMixScale: 1.1, tremoloScale: 1.0),
-		wild: (attackDef: \tickSoft, attackAmp: 0.12, droneBright: 0.9, verbRoom: 0.72, verbMixScale: 1.2, tremoloScale: 0.85)
+		wild: (attackDef: \tickSoft, attackAmp: 0.12, droneBright: 0.9, verbRoom: 0.72, verbMixScale: 1.2, tremoloScale: 0.85),
+		meridian: (attackDef: \bellDistant, attackAmp: 0.15, droneBright: 0.95, verbRoom: 0.85, verbMixScale: 1.35, tremoloScale: 0.7)
 	);
 	~profile = ~profiles.at((~gardenProfile ? \default)) ? ~profiles.at(\default);
 	~master.set(\verbRoom, ~profile.at(\verbRoom));
