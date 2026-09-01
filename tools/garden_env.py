@@ -241,7 +241,7 @@ def design_wild(p: Params, world_w, world_h, rng_seed=7):
     apply_layer(p, 10, "Bonus", (x, y), ("circ", r), r * 1.3, "off")
 
 
-def design_meridian(p: Params, world_w, world_h, rng_seed=7):
+def design_meridian(p: Params, world_w, world_h, rng_seed=7, day_scale=1.0):
     """A wandering sun. Two large soft zones orbit the torus forever: the Sun
     (life is easier: lower minimum cell energy, a mild breeze) and its
     antipodal Shadow (life is harsher). A small storm patrols on another
@@ -255,7 +255,8 @@ def design_meridian(p: Params, world_w, world_h, rng_seed=7):
     sun_r = min(world_w, world_h) * 0.24
     # a long day: ecology needs time to answer the sun. One x-lap every ~400k
     # steps (8.3 min at 800 TPS) lets growth and death track the light.
-    sun_v = (0.0075, 0.0025)
+    # day_scale stretches the day (2.0 = 800k-step day) for period experiments.
+    sun_v = (0.0075 / day_scale, 0.0025 / day_scale)
     apply_layer(p, 1, "Sun", (cx - world_w * 0.25, cy), ("circ", sun_r), sun_r * 0.8, ("perlin", 0.006, 90, 5000), vel=sun_v)
     p.set_color_values(["Cell life cycle", "Minimum energy"], 1, 30.0)
 
@@ -290,6 +291,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--design", default="vortex", choices=["vortex", "rain", "islands", "wild", "meridian"])
     ap.add_argument("--rng", type=int, default=7)
+    ap.add_argument("--day-scale", type=float, default=1.0, help="meridian only: stretch the sun's period (2.0 = twice as long a day)")
     ap.add_argument("--world", default="3000x3000")
     ap.add_argument(
         "--energy-pool",
@@ -308,7 +310,7 @@ def main():
     elif args.design == "wild":
         design_wild(p, w, h, args.rng)
     elif args.design == "meridian":
-        design_meridian(p, w, h, args.rng)
+        design_meridian(p, w, h, args.rng, args.day_scale)
     else:
         design_vortex(p, w, h)
     if args.energy_pool > 0:

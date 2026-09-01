@@ -48,6 +48,7 @@ int main(int argc, char** argv)
         CLI::App app{"Headless ALIEN server: runs a simulation and streams statistics/events via OSC plus render geometry via UDP. v" + Const::ProgramVersion};
 
         std::string inputFilename;
+        std::string paramsFilename;
         std::string oscHost;
         int oscPort = 0;
         int oscListen = 12000;
@@ -62,6 +63,7 @@ int main(int argc, char** argv)
         int maxGeomFluid = 2000;
         int maxGeomLines = 1500;
         app.add_option("-i", inputFilename, "Simulation input file.")->required();
+        app.add_option("--params", paramsFilename, "Optional SimulationParameters JSON overriding the scene's parameters.");
         app.add_option("--osc-listen", oscListen, "UDP port for OSC subscribers; any datagram subscribes its sender.");
         app.add_option("--osc-host", oscHost, "Optional fixed OSC destination host (push mode, e.g. localhost tests).");
         app.add_option("--osc-port", oscPort, "Optional fixed OSC destination port.");
@@ -82,6 +84,13 @@ int main(int argc, char** argv)
         if (!SerializerService::get().deserializeSimulationFromFiles(simData, inputFilename)) {
             std::cout << "Could not read from input files." << std::endl;
             return 1;
+        }
+        if (!paramsFilename.empty()) {
+            if (!SerializerService::get().deserializeSimulationParametersFromFile(simData._simulationParameters, paramsFilename)) {
+                std::cout << "Could not read parameters from " << paramsFilename << std::endl;
+                return 1;
+            }
+            std::cout << "Parameters overridden from " << paramsFilename << std::endl;
         }
 
         auto simulationFacade = std::make_shared<_SimulationFacadeImpl>();
