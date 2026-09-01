@@ -453,7 +453,7 @@ def main():
             [
                 "ffmpeg", "-y", "-loglevel", "error",
                 "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{fb_w}x{fb_h}", "-r", str(args.record_fps), "-i", "-",
-                "-vf", "vflip", "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+                "-vf", "vflip", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18", "-pix_fmt", "yuv420p",
                 args.record,
             ],
             stdin=subprocess.PIPE,
