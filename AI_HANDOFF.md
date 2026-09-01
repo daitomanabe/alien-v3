@@ -56,11 +56,10 @@ Start by checking the real checkout, branch/worktree, and dirty state. Do not as
 ## Pending Work
 
 1. `[VERIFIED->収穫済]` **日長実験**: r(day) 0.41(m3, 2倍日長)> 0.30(m2朝)で「長い日は追従を強める」。古代 m2 は移動追従を失い脈動のみ(振幅1/2.4)。位相遅れは一様に約1/4日。結果と図は GARDEN-NOTES「日長実験」節。`scenes/meridian3-mature.sim`(4.26M steps)保存済み。両サーバー(srv=12000/12001 m2、exp=12060/12061 m3)と centroid ロガー×2・keeper は**走行継続中** — さらなる長期データが欲しければそのまま、不要なら `ALIEN_SESSION=alien-exp bash scripts/alien-ctl.sh stop` で m3 を畳む。
-2. `[OLD-IN_PROGRESS]` (旧記載) mmmmm で meridian2(alien-srv, 12000/12001, 3140万steps・古代)と meridian3(alien-exp, 12060/12061, 太陽速度半分=800k steps/日、同一世界バイト)が並走、GPU折半で各 ~475 TPS。Mac 側 `tools/centroid_log.py` ×2 が `logs/meridian{2,3}-centroid.csv` に 1Hz 記録中。keeper は両庭を毎時 `archive/m{2,3}-saved-*.sim` に保存。**収穫**: 数時間後に `tools/centroid_analyze.py <csv> --day-seconds <日steps÷平均TPS> --out sound/meridianN-centroid.png`(m2: 400000÷TPS、m3: 800000÷TPS)。acceptance: 両群の r(half-day)/r(day) を並べ、日長2倍が追従を強めるか飽和かを判定できること。
 2. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
-2. `[UNKNOWN]` 組曲 v3 のユーザー試聴と調整 — first check: `takes/suite-20260831-214722.mp4`(rain→islands→wild→colosseum、loudnorm 済み)を聴き、尺・順序・カタクリズム量の好みを確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
-3. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: `viz/aizuri-rain.png` を見る。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
-4. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
+3. `[UNKNOWN]` 組曲 v4 のユーザー試聴と調整 — first check: 送付済み `viz/suite-v4-preview.mp4`(5楽章・晩鐘コーダ、4:58)への反応を確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
+4. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: ユーザーに送付済みの `viz/meridian2-aizuri-preview.mp4`(fluid 6000・51秒)への反応を待つ。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
+5. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
 
 ## Blockers and Decisions Needed
 
