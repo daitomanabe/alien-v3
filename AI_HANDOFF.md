@@ -1,7 +1,7 @@
 # AI_HANDOFF
 
 > Contract: `portable-agent-handoff/v1`
-> Captured: `2026-08-31T22:10:00+09:00`
+> Captured: `2026-09-01T12:00:00+09:00`
 > Scope: chrxh/alien フォーク上の生成庭園プロジェクト — CUDA 生態系をヘッドレス実行し、独自ビジュアル(墨インク)と SuperCollider ソニフィケーションをリアルタイム配信する制作環境の引き継ぎ。
 
 ## Status
@@ -55,7 +55,7 @@ Start by checking the real checkout, branch/worktree, and dirty state. Do not as
 
 ## Pending Work
 
-1. `[IN_PROGRESS]` wild の長期進化観察 — mmmmm の tmux `alien-srv`(wild-mature、800 TPS)+ `alien-keeper`(1時間ごと `/alien/save` → `archive/`)が走行中。acceptance condition: 系統分岐(開始時 49)の推移を `logs/wild-long.log` から再構成し、種分化イベントをグラフと絵で提示できること。
+1. `[VERIFIED->収穫済]` wild 長期観察: 31.7M steps / 11 時間の完全ログを回収、系統 45..58 の動的平衡を `sound/wild-lifetime.png` に可視化。最終形 = `scenes/wild-ancient.sim`。現在のメインは **Meridian v2**(巡る太陽の庭、`scenes/meridian2.sim`、`logs/meridian2.log`)— 生態の太陽追従を重心自己相関で実証済み(`sound/meridian2-centroid.png`)。keeper は `scripts/keeper.sh`(tmux クォート壊れを修正)。
 2. `[UNKNOWN]` 組曲 v3 のユーザー試聴と調整 — first check: `takes/suite-20260831-214722.mp4`(rain→islands→wild→colosseum、loudnorm 済み)を聴き、尺・順序・カタクリズム量の好みを確認する。構成は `scripts/suite.sh` の GARDENS 配列で編集可能。
 3. `[UNKNOWN]` aizuri ルックの採否と調整 — first check: `viz/aizuri-rain.png` を見る。藍が読めるのは fluid リッチ配信(サーバ `--geom-fluid 6000` 以上)とセット。採用ならプロファイル/庭との対応表を決める。
 4. `[UNKNOWN]` take.sh をパイプ経由で実行すると exit 144 で失敗する事象(ファイルリダイレクトでは常に成功)— first check: 再現するか `bash scripts/take.sh 20 t 0 | tail` を試し、再現すればハーネスのプロセスグループ挙動を疑う。回避策(`> log 2>&1` 実行)は確立済み。
@@ -112,3 +112,4 @@ Do not treat the conversation summary as a substitute for this document. Do not 
 | --- | --- | --- | --- |
 | `2026-08-31` | `Claude Code` | initial capture(移行・5庭・組曲完成時点) | git ab7b98cf7 / 本書の VERIFIED 項目 |
 | `2026-08-31` | `Claude Code` | wild 長期観察を稼働(自動セーブ付き)、組曲 v3(楽曲構成・loudnorm)、aizuri ルック、rain/islands シーン取り違え修正(両ホスト)、ctl のセッション/ポート env 化 | git afd774b69; suite `takes/suite-20260831-214722.mp4` |
+| `2026-09-01` | `Claude Code` | 6時間セッション: Meridian(巡る太陽+膜迷宮、動くゾーン初使用)v1→v2、太陽追従を重心自己相関で実証、種分化 64 系統→46 の一往復を記録、wild 11時間の生涯回収(wild-ancient)、--offscreen 録画(スロットル根絶)、meridian 鐘プロファイル | git a3c40aa40; `sound/meridian2-centroid.png` / `sound/wild-lifetime.png`; saves: meridian2-mature / meridian1-young / wild-ancient |
