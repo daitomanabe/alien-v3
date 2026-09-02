@@ -31,7 +31,7 @@ nohup /Applications/SuperCollider.app/Contents/MacOS/sclang sound/test-capture.s
 
 sleep 13
 echo "video: starting renderer"
-(viz/venv/bin/python viz/alien_viz.py --look ink --offscreen --server "$SERVER_IP" --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
+(viz/venv/bin/python viz/alien_viz.py --look ink --offscreen --width 858 --server "$SERVER_IP" --port "$GEOM_PORT" --record /tmp/take-video.mp4 \
     --exit-after $((SECONDS_LEN + 6)) > /tmp/take-viz.log 2>&1 &)
 
 if [ "$PULSES" -gt 0 ]; then

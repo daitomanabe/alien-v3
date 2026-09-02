@@ -376,16 +376,18 @@ def main():
     if args.offscreen:
         glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     # fit the window into the monitor workarea, preserving world aspect
-    try:
-        _, _, wa_w, wa_h = glfw.get_monitor_workarea(glfw.get_primary_monitor())
-    except Exception:
-        wa_w, wa_h = 1512, 950
-    if win_h > wa_h - 80:
-        win_h = wa_h - 80
-        win_w = max(300, int(win_h * world_w / world_h))
-    if win_w > wa_w - 40:
-        win_w = wa_w - 40
-        win_h = max(200, int(win_w * world_h / world_w))
+    # (offscreen renders to an FBO — no reason to shrink to the desktop)
+    if not args.offscreen:
+        try:
+            _, _, wa_w, wa_h = glfw.get_monitor_workarea(glfw.get_primary_monitor())
+        except Exception:
+            wa_w, wa_h = 1512, 950
+        if win_h > wa_h - 80:
+            win_h = wa_h - 80
+            win_w = max(300, int(win_h * world_w / world_h))
+        if win_w > wa_w - 40:
+            win_w = wa_w - 40
+            win_h = max(200, int(win_w * world_h / world_w))
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -400,7 +402,9 @@ def main():
     if args.offscreen:
         # fixed 2x offscreen target; immune to window/framebuffer quirks
         fb_w, fb_h = win_w * 2, win_h * 2
-        point_scale = 2.0
+        # brush width follows the canvas so every resolution keeps the look
+        # of the canonical 1716px takes (at fb 1716 this is the same 2.0)
+        point_scale = fb_w / 858.0
     else:
         # use the GL-reported size: glfw's framebuffer size can disagree by a few px
         fb_w, fb_h = ctx.screen.width, ctx.screen.height
